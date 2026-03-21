@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invoice Generator – softwareketan Developers</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #1a1a2e;
+        --accent: #0f3460;
+        --gold: #e94560;
+        --light: #f0f4f8;
+        --border: #2a2a4a;
+        --muted: #6b7a99;
+        --white: #ffffff;
+        --success: #27ae60;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "IBM Plex Sans", sans-serif;
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+        min-height: 100vh;
+        color: var(--white);
+        padding: 20px;
+      }
+
+      /* ── FORM PAGE ── */
+      #form-page {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+
+      .form-header {
+        text-align: center;
+        padding: 40px 0 30px;
+        position: relative;
+      }
+      .form-header::after {
+        content: "";
+        display: block;
+        width: 80px;
+        height: 3px;
+        background: var(--gold);
+        margin: 16px auto 0;
+      }
+      .form-header h1 {
+        font-size: 2.2rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        background: linear-gradient(90deg, #fff, #a0b4ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .form-header p {
+        color: #a0b4ff;
+        font-size: 0.9rem;
+        margin-top: 8px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 16px;
+        padding: 28px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(10px);
+      }
+      .card-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #a0b4ff;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .card-title::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+      }
+      .span-2 {
+        grid-column: span 2;
+      }
+
+      label {
+        display: block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #8899cc;
+        margin-bottom: 6px;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        padding: 10px 14px;
+        color: var(--white);
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 0.88rem;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+        outline: none;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: #6080ff;
+        background: rgba(96, 128, 255, 0.1);
+      }
+      input::placeholder {
+        color: rgba(255, 255, 255, 0.25);
+      }
+      textarea {
+        resize: vertical;
+        min-height: 70px;
+      }
+      select option {
+        background: #1a1a3e;
+        color: white;
+      }
+
+      /* Items table in form */
+      .items-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .items-table th {
+        font-size: 0.65rem;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: #8899cc;
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .items-table td {
+        padding: 6px 4px;
+        vertical-align: middle;
+      }
+      .items-table td input {
+        padding: 8px 10px;
+        font-size: 0.82rem;
+      }
+      .items-table td input[type="number"] {
+        -moz-appearance: textfield;
+      }
+      .items-table td input[type="number"]::-webkit-outer-spin-button,
+      .items-table td input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+      }
+
+      .btn-add-row {
+        background: rgba(96, 128, 255, 0.15);
+        border: 1px dashed rgba(96, 128, 255, 0.5);
+        color: #a0b4ff;
+        border-radius: 8px;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-size: 0.82rem;
+        font-family: "IBM Plex Sans", sans-serif;
+        margin-top: 12px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .btn-add-row:hover {
+        background: rgba(96, 128, 255, 0.25);
+        border-style: solid;
+      }
+
+      .btn-del {
+        background: rgba(233, 69, 96, 0.15);
+        border: 1px solid rgba(233, 69, 96, 0.3);
+        color: #e94560;
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: all 0.2s;
+      }
+      .btn-del:hover {
+        background: rgba(233, 69, 96, 0.3);
+      }
+
+      .btn-generate {
+        width: 100%;
+        background: linear-gradient(135deg, #3a5aff, #6080ff);
+        border: none;
+        border-radius: 12px;
+        padding: 16px;
+        color: white;
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 8px 30px rgba(58, 90, 255, 0.4);
+        margin-top: 10px;
+        text-transform: uppercase;
+      }
+      .btn-generate:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(58, 90, 255, 0.6);
+      }
+      .btn-generate:active {
+        transform: translateY(0);
+      }
+
+      /* ── INVOICE PRINT PAGE ── */
+      #invoice-page {
+        display: none;
+      }
+
+      .back-btn {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        border-radius: 8px;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 0.88rem;
+        margin-bottom: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+      }
+      .back-btn:hover {
+        background: rgba(255, 255, 255, 0.18);
+      }
+
+      .print-btn {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        border: none;
+        color: white;
+        border-radius: 8px;
+        padding: 10px 24px;
+        cursor: pointer;
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 0.88rem;
+        font-weight: 600;
+        margin-bottom: 16px;
+        margin-left: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);
+        transition: all 0.2s;
+      }
+      .print-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(39, 174, 96, 0.5);
+      }
+
+      /* INVOICE DOCUMENT */
+      #invoice-doc {
+        background: #fff;
+        color: #000;
+        max-width: 900px;
+        margin: 0 auto;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        border: 2px solid #000;
+        padding: 0;
+      }
+
+      .inv-top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #000;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: bold;
+      }
+
+      .inv-company {
+        text-align: center;
+        border-bottom: 2px solid #000;
+        padding: 8px 10px 4px;
+      }
+      .inv-company h2 {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 2px;
+      }
+      .inv-company p {
+        font-size: 10.5px;
+        line-height: 1.5;
+      }
+
+      .inv-mid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-bottom: 2px solid #000;
+      }
+      .inv-mid-left {
+        border-right: 2px solid #000;
+        padding: 8px 10px;
+      }
+      .inv-mid-left p {
+        line-height: 1.5;
+        font-size: 11px;
+      }
+      .inv-mid-left .buyer-title {
+        text-decoration: underline;
+        font-weight: bold;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .inv-mid-right {
+        padding: 8px 10px;
+      }
+      .inv-mid-right table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .inv-mid-right td {
+        padding: 2px 4px;
+        font-size: 11px;
+      }
+      .inv-mid-right td:first-child {
+        font-weight: bold;
+        white-space: nowrap;
+      }
+
+      /* Items table */
+      .inv-items {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .inv-items th {
+        border: 1px solid #000;
+        background: #f5f5f5;
+        padding: 5px 6px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .inv-items td {
+        border: 1px solid #000;
+        padding: 5px 6px;
+        font-size: 11px;
+        vertical-align: top;
+      }
+      .inv-items td.num {
+        text-align: right;
+      }
+      .inv-items td.ctr {
+        text-align: center;
+      }
+
+      .inv-items tbody tr td:nth-child(3) {
+        text-align: right;
+      }
+
+      /* Footer totals */
+      .inv-footer {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-top: 2px solid #000;
+      }
+      .inv-footer-left {
+        border-right: 2px solid #000;
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+      .inv-footer-left table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .inv-footer-left td {
+        padding: 2px 6px;
+      }
+      .inv-footer-left tr:first-child td {
+        font-weight: bold;
+        border-bottom: 1px solid #000;
+      }
+
+      .inv-footer-right {
+        padding: 8px 10px;
+      }
+      .inv-footer-right table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .inv-footer-right td {
+        padding: 2px 4px;
+        font-size: 11px;
+      }
+      .inv-footer-right td:last-child {
+        text-align: right;
+        font-weight: bold;
+      }
+      .inv-footer-right .grand-row td {
+        font-size: 13px;
+        font-weight: bold;
+        border-top: 2px solid #000;
+        border-bottom: 2px solid #000;
+        padding-top: 5px;
+        padding-bottom: 5px;
+      }
+      .inv-footer-right .tax-header td {
+        font-weight: bold;
+        border-bottom: 1px solid #ccc;
+      }
+
+      .inv-bank {
+        border-top: 2px solid #000;
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+
+      .inv-bill-amount {
+        border-top: 2px solid #000;
+        display: grid;
+        grid-template-columns: 1fr auto;
+      }
+      .inv-bill-amount .words {
+        padding: 8px 10px;
+        font-size: 11px;
+        border-right: 2px solid #000;
+      }
+      .inv-bill-amount .words span {
+        font-weight: bold;
+      }
+      .inv-bill-amount .grand {
+        padding: 8px 14px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 13px;
+        min-width: 160px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .inv-bill-amount .grand .grand-label {
+        font-size: 11px;
+        color: #333;
+      }
+
+      .inv-terms {
+        border-top: 2px solid #000;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        font-size: 10px;
+      }
+      .inv-terms .terms-left {
+        border-right: 2px solid #000;
+        padding: 6px 10px;
+      }
+      .inv-terms .terms-right {
+        padding: 6px 10px;
+        text-align: right;
+        font-weight: bold;
+        font-size: 11px;
+      }
+
+      .inv-marathi {
+        border-top: 1px solid #ccc;
+        padding: 5px 10px;
+        font-size: 10px;
+        color: #555;
+        text-align: center;
+      }
+
+      @media print {
+        body {
+          background: white !important;
+          padding: 0 !important;
+        }
+        #invoice-page {
+          display: block !important;
+        }
+        #form-page {
+          display: none !important;
+        }
+        .back-btn,
+        .print-btn {
+          display: none !important;
+        }
+        #invoice-doc {
+          max-width: 100%;
+          border: 2px solid #000;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ════════════════════════ FORM PAGE ════════════════════════ -->
+    <div id="form-page">
+      <div class="form-header">
+        <h1>Invoice Generator</h1>
+        <p>softwareketan Developers · Invoice Cum Challan</p>
+      </div>
+
+      <!-- Seller Info -->
+      <div class="card">
+        <div class="card-title">Seller / Company Info</div>
+        <div class="grid-2">
+          <div>
+            <label>GSTIN</label>
+            <input type="text" id="f-gstin" value="24GSTINKETAN1ZR" />
+          </div>
+          <div>
+            <label>Company Name</label>
+            <input
+              type="text"
+              id="f-company"
+              value="softwareketan Developers"
+            />
+          </div>
+          <div class="span-2">
+            <label>Address Line 1</label>
+            <input
+              type="text"
+              id="f-addr1"
+              value="A/12, Shrenik Park, Opp. Jain Temple,Near Akota Stadium, Akota Dandiya Bajar,Vadodara,Gujarat"
+            />
+          </div>
+          <div>
+            <label>Phone</label>
+            <input type="text" id="f-phone" value="0265-1234567,9898989898" />
+          </div>
+          <div>
+            <label>Email</label>
+            <input type="text" id="f-email" value="softwareketan@gmail.com" />
+          </div>
+          <div>
+            <label>FLZ Lic No.</label>
+            <input type="text" id="f-flz" value="RWR/147F" />
+          </div>
+          <div>
+            <label>Seed Lic No.</label>
+            <input type="text" id="f-seed" value="RWR/203RS" />
+          </div>
+          <div>
+            <label>Pesticide Lic No.</label>
+            <input type="text" id="f-pest" value="RWR/47RP" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Invoice Meta -->
+      <div class="card">
+        <div class="card-title">Invoice Details</div>
+        <div class="grid-3">
+          <div>
+            <label>Invoice No.</label>
+            <input type="text" id="f-inv-no" value="59" />
+          </div>
+          <div>
+            <label>Date</label>
+            <input type="date" id="f-date" value="2020-03-31" />
+          </div>
+          <div>
+            <label>LR Reference No.</label>
+            <input type="text" id="f-lr" value="123456" />
+          </div>
+          <div>
+            <label>Transport Name</label>
+            <input type="text" id="f-transport" value="" />
+          </div>
+          <div>
+            <label>Vehicle No.</label>
+            <input type="text" id="f-vehicle" value="GJ 06 1234" />
+          </div>
+          <div>
+            <label>Narration</label>
+            <input type="text" id="f-narration" value="Narathion" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Buyer Info -->
+      <div class="card">
+        <div class="card-title">Buyer Details</div>
+        <div class="grid-2">
+          <div>
+            <label>Buyer Name</label>
+            <input
+              type="text"
+              id="f-buyer-name"
+              value="Reliance Industries Pvt Ltd"
+            />
+          </div>
+          <div>
+            <label>Contact No.</label>
+            <input type="text" id="f-buyer-contact" value="9898598985" />
+          </div>
+          <div class="span-2">
+            <label>Buyer Address</label>
+            <input
+              type="text"
+              id="f-buyer-addr"
+              value="234, Plot No. AB-34, Hazira Industrial Estate, Piplod, Surat"
+            />
+          </div>
+          <div>
+            <label>Buyer GSTIN</label>
+            <input type="text" id="f-buyer-gstin" value="24ASWBD4582Q1ZW" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Items -->
+      <div class="card">
+        <div class="card-title">Product Items</div>
+        <div style="overflow-x: auto">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width: 30px">Sr</th>
+                <th>Product Name (EN)</th>
+                <th>Product Name (HI/MR)</th>
+                <th>Batch/Exp</th>
+                <th>HSN</th>
+                <th>Basic Price</th>
+                <th>CGST%</th>
+                <th>SGST%</th>
+                <th>IGST%</th>
+                <th>Sales Price</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="items-body"></tbody>
+          </table>
+        </div>
+        <button class="btn-add-row" onclick="addRow()">
+          ＋ Add Product Row
+        </button>
+      </div>
+
+      <!-- Bank & Terms -->
+      <div class="card">
+        <div class="card-title">Bank & Terms</div>
+        <div class="grid-2">
+          <div>
+            <label>Bank Name</label>
+            <input type="text" id="f-bank" value="Punjab National Bank" />
+          </div>
+          <div>
+            <label>Account No.</label>
+            <input type="text" id="f-ac" value="0405008700008228" />
+          </div>
+          <div>
+            <label>IFSC Code</label>
+            <input type="text" id="f-ifsc" value="PUNB0040500" />
+          </div>
+          <div>
+            <label>Branch</label>
+            <input type="text" id="f-branch" value="Br. Circular Rd, Rewari" />
+          </div>
+          <div class="span-2">
+            <label>Terms & Conditions</label>
+            <textarea id="f-terms">
+1) Goods once sold will not be taken back or exchanged
+2) Cheque Bounce Charges Rs. 450
+3) Subject to Rewari Juridiscation</textarea
+            >
+          </div>
+          <div class="span-2">
+            <label>Footer Note (Marathi/regional text)</label>
+            <textarea id="f-footer-note">
+विका हुआ माल वापिस नहीं लिया जाएगा। इस कृषि उत्पन की गुणवत्ता के लिए हम जिम्मेदार हैं. कोई परिवतन के लिए नहीं. कृपया दुकाना दूसरे कम्पनी से ना ले।</textarea
+            >
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-generate" onclick="generateInvoice()">
+        ⚡ Generate Invoice
+      </button>
+      <br /><br />
+    </div>
+
+    <!-- ════════════════════════ INVOICE PAGE ════════════════════════ -->
+    <div id="invoice-page">
+      <div style="max-width: 900px; margin: 0 auto; padding: 10px 0 20px">
+        <button class="back-btn" onclick="goBack()">← Back to Form</button>
+        <button class="print-btn" onclick="window.print()">
+          🖨 Print / Save PDF
+        </button>
+      </div>
+
+      <div id="invoice-doc">
+        <!-- Top bar -->
+        <div class="inv-top-bar">
+          <span id="inv-gstin-display"></span>
+          <span style="font-size: 14px">INVOICE CUM CHALLAN</span>
+          <span>Original For Buyer</span>
+        </div>
+
+        <!-- Company header -->
+        <div class="inv-company">
+          <h2 id="inv-company-name"></h2>
+          <p id="inv-company-addr"></p>
+          <p id="inv-company-lic"></p>
+        </div>
+
+        <!-- Buyer + Invoice meta -->
+        <div class="inv-mid">
+          <div class="inv-mid-left">
+            <p class="buyer-title">Buyer's Name and Address</p>
+            <p id="inv-buyer-name" style="font-weight: 600"></p>
+            <p id="inv-buyer-addr"></p>
+            <p>Contact No. = <span id="inv-buyer-contact"></span></p>
+            <p>GSTIN = <span id="inv-buyer-gstin"></span></p>
+          </div>
+          <div class="inv-mid-right">
+            <table>
+              <tr>
+                <td>Invoice No. :</td>
+                <td id="inv-no"></td>
+                <td style="width: 80px; text-align: right">Date :</td>
+                <td id="inv-date"></td>
+              </tr>
+              <tr>
+                <td>LR Reference No</td>
+                <td id="inv-lr" colspan="3"></td>
+              </tr>
+              <tr>
+                <td>Transport Name</td>
+                <td id="inv-transport" colspan="3"></td>
+              </tr>
+              <tr>
+                <td>Vehicle No</td>
+                <td id="inv-vehicle" colspan="3"></td>
+              </tr>
+              <tr>
+                <td></td>
+                <td id="inv-narration" colspan="3"></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- Items table -->
+        <table class="inv-items">
+          <thead>
+            <tr>
+              <th rowspan="2">Sr.</th>
+              <th rowspan="2">Product, मोहल्ट<br />Batch &amp; Exp Date</th>
+              <th rowspan="2">HSN<br />Code</th>
+              <th rowspan="2">Basic<br />Price</th>
+              <th colspan="2">CGST Rs.<br />CGST %</th>
+              <th colspan="2">SGST Rs.<br />CGST %</th>
+              <th colspan="2">IGST Rs.<br />CGST %</th>
+              <th rowspan="2">Sales<br />Price</th>
+              <th rowspan="2">Qty</th>
+              <th rowspan="2">Unit</th>
+              <th rowspan="2">Amount</th>
+            </tr>
+            <tr>
+              <th>Rs.</th>
+              <th>%</th>
+              <th>Rs.</th>
+              <th>%</th>
+              <th>Rs.</th>
+              <th>%</th>
+            </tr>
+          </thead>
+          <tbody id="inv-items-body"></tbody>
+        </table>
+
+        <!-- Footer -->
+        <div class="inv-footer">
+          <div class="inv-footer-left">
+            <table>
+              <tr>
+                <td>GST %</td>
+                <td>Taxable Amt</td>
+                <td>SGST Amt.</td>
+                <td>CGST Amt.</td>
+                <td>Tax Amt.</td>
+              </tr>
+              <tr>
+                <td id="inv-gst-pct">5 %</td>
+                <td id="inv-taxable"></td>
+                <td id="inv-sgst-amt"></td>
+                <td id="inv-cgst-amt"></td>
+                <td id="inv-tax-amt"></td>
+              </tr>
+            </table>
+            <br />
+            <div
+              id="inv-bank-info"
+              style="font-size: 11px; line-height: 1.7"
+            ></div>
+          </div>
+          <div class="inv-footer-right">
+            <table>
+              <tr>
+                <td>Total Amount Before Tax</td>
+                <td id="inv-before-tax"></td>
+              </tr>
+              <tr class="tax-header">
+                <td colspan="2" style="padding-top: 6px; font-weight: bold">
+                  Tax Breakdown
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-left: 10px">Add: SGST</td>
+                <td id="inv-sgst-r" style="font-style: italic"></td>
+              </tr>
+              <tr>
+                <td style="padding-left: 10px">Add: CGST</td>
+                <td id="inv-cgst-r" style="font-style: italic"></td>
+              </tr>
+              <tr>
+                <td style="padding-left: 10px">Add: IGST</td>
+                <td id="inv-igst-r" style="font-style: italic">0.00</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold">Total Tax Amount : GST</td>
+                <td id="inv-total-tax"></td>
+              </tr>
+              <tr>
+                <td>(-) Round Off</td>
+                <td id="inv-round-off"></td>
+              </tr>
+              <tr class="grand-row">
+                <td>GRAND TOTAL</td>
+                <td id="inv-grand"></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- Bill amount in words -->
+        <div class="inv-bill-amount">
+          <div class="words">
+            <span>Bill Amount In Words : </span
+            ><span id="inv-words" style="font-weight: bold"></span>
+          </div>
+          <div class="grand">
+            <div class="grand-label">GRAND TOTAL</div>
+            <div id="inv-grand2" style="font-size: 18px"></div>
+          </div>
+        </div>
+
+        <!-- Terms -->
+        <div class="inv-terms">
+          <div class="terms-left">
+            <div style="font-weight: bold; margin-bottom: 4px">
+              Terms &amp; Conditions :
+            </div>
+            <div id="inv-terms"></div>
+          </div>
+          <div class="terms-right">
+            For <span id="inv-company-for"></span><br /><br /><br />
+            Auth. Signatory
+          </div>
+        </div>
+
+        <!-- Footer note -->
+        <div class="inv-marathi" id="inv-marathi"></div>
+      </div>
+      <br />
+    </div>
+
+    <script>
+      // ───── Row management ─────
+      let rowCount = 0;
+      function addRow(data = {}) {
+        rowCount++;
+        const sr = rowCount;
+        const body = document.getElementById("items-body");
+        const tr = document.createElement("tr");
+        tr.id = "row-" + sr;
+        tr.innerHTML = `
+    <td><input type="text" value="${sr}" style="width:36px;text-align:center;" readonly></td>
+    <td><input type="text" placeholder="Product name (EN)" value="${data.nameEn || ""}" style="min-width:130px;"></td>
+    <td><input type="text" placeholder="हिंदी/मराठी" value="${data.nameHi || ""}" style="min-width:110px;"></td>
+    <td><input type="text" placeholder="Batch/Exp" value="${data.batch || ""}" style="min-width:120px;"></td>
+    <td><input type="text" placeholder="HSN" value="${data.hsn || ""}" style="width:80px;"></td>
+    <td><input type="number" placeholder="0.00" value="${data.basic || ""}" style="width:80px;" oninput="calcRow(${sr})"></td>
+    <td><input type="number" placeholder="2.5" value="${data.cgstPct || "2.5"}" style="width:55px;" oninput="calcRow(${sr})"></td>
+    <td><input type="number" placeholder="2.5" value="${data.sgstPct || "2.5"}" style="width:55px;" oninput="calcRow(${sr})"></td>
+    <td><input type="number" placeholder="0" value="${data.igstPct || "0"}" style="width:55px;" oninput="calcRow(${sr})"></td>
+    <td><input type="number" placeholder="0.00" value="${data.sales || ""}" id="sales-${sr}" style="width:80px;" readonly></td>
+    <td><input type="number" placeholder="1" value="${data.qty || ""}" style="width:55px;" oninput="calcRow(${sr})"></td>
+    <td><input type="text" placeholder="Bag/Pcs" value="${data.unit || "Bag"}" style="width:55px;"></td>
+    <td><button class="btn-del" onclick="delRow(${sr})">✕</button></td>
+  `;
+        body.appendChild(tr);
+        if (data.basic) calcRow(sr);
+      }
+
+      function delRow(sr) {
+        const el = document.getElementById("row-" + sr);
+        if (el) el.remove();
+      }
+
+      function calcRow(sr) {
+        const tr = document.getElementById("row-" + sr);
+        if (!tr) return;
+        const inputs = tr.querySelectorAll("input");
+        const basic = parseFloat(inputs[5].value) || 0;
+        const cgst = parseFloat(inputs[6].value) || 0;
+        const sgst = parseFloat(inputs[7].value) || 0;
+        const igst = parseFloat(inputs[8].value) || 0;
+        const salesPrice =
+          basic +
+          (basic * cgst) / 100 +
+          (basic * sgst) / 100 +
+          (basic * igst) / 100;
+        inputs[9].value = salesPrice ? salesPrice.toFixed(2) : "";
+      }
+
+      // ───── Pre-fill sample data ─────
+      window.onload = function () {
+        addRow({
+          nameEn: "Fertilizer Detail",
+          nameHi: "फरटीलाइज़नर ओक्सी",
+          batch: "abc123456  10-2022",
+          hsn: "",
+          basic: 952.38,
+          cgstPct: 2.5,
+          sgstPct: 2.5,
+          igstPct: 0,
+          qty: 2,
+          unit: "Bag",
+        });
+        addRow({
+          nameEn: "Fertilizer Detail",
+          nameHi: "फरटीलाइज़नर ओक्सी",
+          batch: "abc123456  10-2022",
+          hsn: "",
+          basic: 952.38,
+          cgstPct: 2.5,
+          sgstPct: 2.5,
+          igstPct: 0,
+          qty: 1,
+          unit: "Bag",
+        });
+        addRow({
+          nameEn: "Product Name Abc",
+          nameHi: "स्त",
+          batch: "N.A.",
+          hsn: "12345678",
+          basic: 114.29,
+          cgstPct: 2.5,
+          sgstPct: 2.5,
+          igstPct: 0,
+          qty: 3,
+          unit: "Pcs.",
+        });
+        addRow({
+          nameEn: "Product Name",
+          nameHi: "सए",
+          batch: "N.A.",
+          hsn: "1234",
+          basic: 142.86,
+          cgstPct: 2.5,
+          sgstPct: 2.5,
+          igstPct: 0,
+          qty: 100,
+          unit: "Pcs.",
+        });
+        addRow({
+          nameEn: "Fertilizer Detail",
+          nameHi: "फरटीलाइज़नर ओक्सी",
+          batch: "abc123456  10-2022",
+          hsn: "",
+          basic: 9523.81,
+          cgstPct: 2.5,
+          sgstPct: 2.5,
+          igstPct: 0,
+          qty: 10,
+          unit: "Bag",
+        });
+      };
+
+      // ───── Number to Words ─────
+      function numToWords(n) {
+        const ones = [
+          "",
+          "One",
+          "Two",
+          "Three",
+          "Four",
+          "Five",
+          "Six",
+          "Seven",
+          "Eight",
+          "Nine",
+          "Ten",
+          "Eleven",
+          "Twelve",
+          "Thirteen",
+          "Fourteen",
+          "Fifteen",
+          "Sixteen",
+          "Seventeen",
+          "Eighteen",
+          "Nineteen",
+        ];
+        const tens = [
+          "",
+          "",
+          "Twenty",
+          "Thirty",
+          "Forty",
+          "Fifty",
+          "Sixty",
+          "Seventy",
+          "Eighty",
+          "Ninety",
+        ];
+        function below100(num) {
+          if (num < 20) return ones[num];
+          return (
+            tens[Math.floor(num / 10)] + (num % 10 ? " " + ones[num % 10] : "")
+          );
+        }
+        function below1000(num) {
+          if (num < 100) return below100(num);
+          return (
+            ones[Math.floor(num / 100)] +
+            " Hundred" +
+            (num % 100 ? " " + below100(num % 100) : "")
+          );
+        }
+        function convert(num) {
+          if (num === 0) return "Zero";
+          let result = "";
+          if (num >= 10000000) {
+            result += convert(Math.floor(num / 10000000)) + " Crore ";
+            num %= 10000000;
+          }
+          if (num >= 100000) {
+            result += convert(Math.floor(num / 100000)) + " Lakh ";
+            num %= 100000;
+          }
+          if (num >= 1000) {
+            result += convert(Math.floor(num / 1000)) + " Thousand ";
+            num %= 1000;
+          }
+          if (num > 0) {
+            result += below1000(num);
+          }
+          return result.trim();
+        }
+        const intPart = Math.floor(n);
+        const decPart = Math.round((n - intPart) * 100);
+        let words = convert(intPart) + " Rupees";
+        if (decPart > 0) words += " and " + convert(decPart) + " Paise";
+        words += " Only";
+        return words;
+      }
+
+      // ───── Generate Invoice ─────
+      function generateInvoice() {
+        // Collect items
+        const rows = document.querySelectorAll("#items-body tr");
+        let items = [];
+        rows.forEach((tr) => {
+          const inp = tr.querySelectorAll("input");
+          const basic = parseFloat(inp[5].value) || 0;
+          const cgstPct = parseFloat(inp[6].value) || 0;
+          const sgstPct = parseFloat(inp[7].value) || 0;
+          const igstPct = parseFloat(inp[8].value) || 0;
+          const qty = parseFloat(inp[10].value) || 0;
+          const cgstAmt = (basic * cgstPct) / 100;
+          const sgstAmt = (basic * sgstPct) / 100;
+          const igstAmt = (basic * igstPct) / 100;
+          const salesPrice = basic + cgstAmt + sgstAmt + igstAmt;
+          const amount = salesPrice * qty;
+          items.push({
+            nameEn: inp[1].value,
+            nameHi: inp[2].value,
+            batch: inp[3].value,
+            hsn: inp[4].value,
+            basic,
+            cgstPct,
+            sgstPct,
+            igstPct,
+            cgstAmt,
+            sgstAmt,
+            igstAmt,
+            salesPrice,
+            qty,
+            unit: inp[11].value,
+            amount,
+          });
+        });
+
+        // Compute totals
+        let totalBeforeTax = 0,
+          totalCGST = 0,
+          totalSGST = 0,
+          totalIGST = 0;
+        items.forEach((it) => {
+          totalBeforeTax += it.basic * it.qty;
+          totalCGST += it.cgstAmt * it.qty;
+          totalSGST += it.sgstAmt * it.qty;
+          totalIGST += it.igstAmt * it.qty;
+        });
+        const totalTax = totalCGST + totalSGST + totalIGST;
+        const grandRaw = totalBeforeTax + totalTax;
+        const grandRounded = Math.round(grandRaw);
+        const roundOff = grandRounded - grandRaw;
+
+        // Format date
+        const rawDate = document.getElementById("f-date").value;
+        const [y, m, d] = rawDate.split("-");
+        const dateStr = `${d}-${m}-${y}`;
+
+        // Fill invoice fields
+        document.getElementById("inv-gstin-display").textContent =
+          "GSTIN : " + document.getElementById("f-gstin").value;
+        document.getElementById("inv-company-name").textContent =
+          document.getElementById("f-company").value;
+        document.getElementById("inv-company-addr").textContent =
+          document.getElementById("f-addr1").value +
+          " Ph. " +
+          document.getElementById("f-phone").value +
+          ", E mail : " +
+          document.getElementById("f-email").value;
+        document.getElementById("inv-company-lic").textContent =
+          "FLZ Lic No. : " +
+          document.getElementById("f-flz").value +
+          ",  Seed Lic No. : " +
+          document.getElementById("f-seed").value +
+          ",  Pesticide Lic No. : " +
+          document.getElementById("f-pest").value;
+
+        document.getElementById("inv-buyer-name").textContent =
+          document.getElementById("f-buyer-name").value;
+        document.getElementById("inv-buyer-addr").textContent =
+          document.getElementById("f-buyer-addr").value;
+        document.getElementById("inv-buyer-contact").textContent =
+          document.getElementById("f-buyer-contact").value;
+        document.getElementById("inv-buyer-gstin").textContent =
+          document.getElementById("f-buyer-gstin").value;
+
+        document.getElementById("inv-no").textContent =
+          document.getElementById("f-inv-no").value;
+        document.getElementById("inv-date").textContent = dateStr;
+        document.getElementById("inv-lr").textContent =
+          document.getElementById("f-lr").value;
+        document.getElementById("inv-transport").textContent =
+          document.getElementById("f-transport").value;
+        document.getElementById("inv-vehicle").textContent =
+          document.getElementById("f-vehicle").value;
+        document.getElementById("inv-narration").textContent =
+          document.getElementById("f-narration").value;
+
+        // Items rows
+        const tbody = document.getElementById("inv-items-body");
+        tbody.innerHTML = "";
+        items.forEach((it, i) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+      <td class="ctr">${i + 1}</td>
+      <td>${it.nameEn} ${it.nameHi}<br><small>Batch.Exp: ${it.batch}</small></td>
+      <td class="ctr">${it.hsn}</td>
+      <td class="num">${it.basic.toFixed(2)}</td>
+      <td class="num">${it.cgstAmt.toFixed(2)}</td>
+      <td class="ctr">${it.cgstPct.toFixed(2)} %</td>
+      <td class="num">${it.sgstAmt.toFixed(2)}</td>
+      <td class="ctr">${it.sgstPct.toFixed(2)} %</td>
+      <td class="num">${it.igstAmt.toFixed(2)}</td>
+      <td class="ctr">${it.igstPct.toFixed(2)} %</td>
+      <td class="num">${it.salesPrice.toFixed(2)}</td>
+      <td class="ctr">${it.qty}</td>
+      <td class="ctr">${it.unit}</td>
+      <td class="num">${it.amount.toFixed(2)}</td>
+    `;
+          tbody.appendChild(tr);
+        });
+
+        // Tax summary
+        const avgGstPct =
+          items.length > 0
+            ? items[0].cgstPct + items[0].sgstPct + items[0].igstPct
+            : 5;
+        document.getElementById("inv-gst-pct").textContent = avgGstPct + " %";
+        document.getElementById("inv-taxable").textContent =
+          totalBeforeTax.toFixed(2);
+        document.getElementById("inv-sgst-amt").textContent =
+          totalSGST.toFixed(2);
+        document.getElementById("inv-cgst-amt").textContent =
+          totalCGST.toFixed(2);
+        document.getElementById("inv-tax-amt").textContent =
+          totalTax.toFixed(2);
+
+        document.getElementById("inv-before-tax").textContent =
+          totalBeforeTax.toFixed(2);
+        document.getElementById("inv-sgst-r").textContent =
+          totalSGST.toFixed(2);
+        document.getElementById("inv-cgst-r").textContent =
+          totalCGST.toFixed(2);
+        document.getElementById("inv-igst-r").textContent =
+          totalIGST.toFixed(2);
+        document.getElementById("inv-total-tax").textContent =
+          totalTax.toFixed(2);
+        document.getElementById("inv-round-off").textContent =
+          (roundOff >= 0 ? "+" : "") + roundOff.toFixed(2);
+        document.getElementById("inv-grand").textContent =
+          grandRounded.toFixed(2);
+        document.getElementById("inv-grand2").textContent =
+          grandRounded.toFixed(2);
+
+        // Words
+        document.getElementById("inv-words").textContent =
+          numToWords(grandRounded);
+
+        // Bank
+        const bankHTML = `<strong>Bank Name : ${document.getElementById("f-bank").value}</strong><br>
+Ac No. : ${document.getElementById("f-ac").value}<br>
+IFSC Code : ${document.getElementById("f-ifsc").value} ${document.getElementById("f-branch").value}.`;
+        document.getElementById("inv-bank-info").innerHTML = bankHTML;
+
+        // Terms
+        const termsRaw = document.getElementById("f-terms").value;
+        document.getElementById("inv-terms").innerHTML = termsRaw
+          .split("\n")
+          .map((l, i) => `<div>${l}</div>`)
+          .join("");
+
+        // Footer
+        document.getElementById("inv-marathi").textContent =
+          document.getElementById("f-footer-note").value;
+        document.getElementById("inv-company-for").textContent =
+          document.getElementById("f-company").value;
+
+        // Show invoice
+        document.getElementById("form-page").style.display = "none";
+        document.getElementById("invoice-page").style.display = "block";
+        window.scrollTo(0, 0);
+      }
+
+      function goBack() {
+        document.getElementById("invoice-page").style.display = "none";
+        document.getElementById("form-page").style.display = "block";
+        window.scrollTo(0, 0);
+      }
+    </script>
+  </body>
+</html>
