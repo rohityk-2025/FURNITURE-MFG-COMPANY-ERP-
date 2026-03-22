@@ -1,6 +1,8 @@
 export function generateInvoice(order, items, company) {
   const co  = company || {}
-  const sub = items.reduce((s,i)=>s+parseFloat(i.total_price||0),0)
+  const sub = parseFloat(order.subtotal || items.reduce((s,i)=>s+parseFloat(i.total_price||0),0))
+  const discountAmt = Math.min(parseFloat(order.discount||0), sub)
+  const taxableSub = Math.max(0, sub - discountAmt)
   const cgstAmt = parseFloat(order.cgst||0)
   const sgstAmt = parseFloat(order.sgst||0)
   const igstAmt = parseFloat(order.igst||0)
@@ -187,17 +189,18 @@ export function generateInvoice(order, items, company) {
           ${useIGST ? '<th style="padding:4px 6px;text-align:left">IGST %</th><th style="padding:4px 6px;text-align:right">Taxable Amt</th><th style="padding:4px 6px;text-align:right">IGST Amt</th>' : '<th style="padding:4px 6px;text-align:left">GST %</th><th style="padding:4px 6px;text-align:right">Taxable Amt</th><th style="padding:4px 6px;text-align:right">CGST</th><th style="padding:4px 6px;text-align:right">SGST</th><th style="padding:4px 6px;text-align:right">Total Tax</th>'}
         </tr></thead>
         <tbody>
-          ${useIGST ? `<tr><td style="padding:4px 6px">${items[0]?.igst_pct||0}%</td><td style="padding:4px 6px;text-align:right">${M(sub)}</td><td style="padding:4px 6px;text-align:right;font-weight:700">${M(igstAmt)}</td></tr>`
-          : `<tr><td style="padding:4px 6px">${items[0]?.cgst_pct||0}+${items[0]?.sgst_pct||0}%</td><td style="padding:4px 6px;text-align:right">${M(sub)}</td><td style="padding:4px 6px;text-align:right">${M(cgstAmt)}</td><td style="padding:4px 6px;text-align:right">${M(sgstAmt)}</td><td style="padding:4px 6px;text-align:right;font-weight:700">${M(cgstAmt+sgstAmt)}</td></tr>`}
+          ${useIGST ? `<tr><td style="padding:4px 6px">${items[0]?.igst_pct||0}%</td><td style="padding:4px 6px;text-align:right">${M(taxableSub)}</td><td style="padding:4px 6px;text-align:right;font-weight:700">${M(igstAmt)}</td></tr>`
+          : `<tr><td style="padding:4px 6px">${items[0]?.cgst_pct||0}+${items[0]?.sgst_pct||0}%</td><td style="padding:4px 6px;text-align:right">${M(taxableSub)}</td><td style="padding:4px 6px;text-align:right">${M(cgstAmt)}</td><td style="padding:4px 6px;text-align:right">${M(sgstAmt)}</td><td style="padding:4px 6px;text-align:right;font-weight:700">${M(cgstAmt+sgstAmt)}</td></tr>`}
         </tbody>
       </table>
     </div>
     <div class="bottom-right">
       <div class="total-row"><span>Subtotal</span><span>${M(sub)}</span></div>
+      ${discountAmt>0?`<div class="total-row" style="color:#16a34a"><span>(-) Discount</span><span>${M(discountAmt)}</span></div>`:''}
+      <div class="total-row"><span>Taxable Amount</span><span>${M(taxableSub)}</span></div>
       ${useIGST ? `<div class="total-row" style="color:#555;font-style:italic"><span>IGST</span><span>${M(igstAmt)}</span></div>` : `<div class="total-row" style="color:#555;font-style:italic"><span>CGST + SGST</span><span>${M(cgstAmt+sgstAmt)}</span></div>`}
       ${parseFloat(order.delivery_charges||0)>0?`<div class="total-row"><span>Delivery Charges</span><span>${M(order.delivery_charges)}</span></div>`:''}
       ${parseFloat(order.other_charges||0)>0?`<div class="total-row"><span>Other Charges</span><span>${M(order.other_charges)}</span></div>`:''}
-      ${parseFloat(order.discount||0)>0?`<div class="total-row" style="color:#16a34a"><span>(-) Discount</span><span>${M(order.discount)}</span></div>`:''}
       <div class="total-row grand"><span>GRAND TOTAL</span><span>${M(grand)}</span></div>
       ${parseFloat(order.amount_paid||0)>0?`<div class="total-row" style="color:#16a34a;font-weight:700"><span>Amount Paid</span><span>${M(order.amount_paid)}</span></div>`:''}
       ${balance>0?`<div class="total-row balance"><span>Balance Due</span><span>${M(balance)}</span></div>`:''}

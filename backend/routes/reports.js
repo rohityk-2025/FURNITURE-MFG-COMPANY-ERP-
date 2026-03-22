@@ -5,6 +5,32 @@ const router = express.Router()
 
 const defaultFrom = () => new Date(new Date().getFullYear(),0,1).toISOString().split('T')[0]
 const defaultTo   = () => new Date().toISOString().split('T')[0]
+const defaultLast3From = () => new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toISOString().split('T')[0]
+
+const monthKey = (date) => {
+  const d = new Date(date)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+const monthLabel = (key) => {
+  const [year, month] = key.split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString('en-IN', { month:'short', year:'numeric' })
+}
+
+function getMonthKeys(from, to) {
+  const start = new Date(from)
+  const end = new Date(to)
+  const keys = []
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+  const last = new Date(end.getFullYear(), end.getMonth(), 1)
+
+  while (cursor <= last) {
+    keys.push(monthKey(cursor))
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+
+  return keys
+}
 
 // Sales/Orders
 router.get('/sales', auth, async (req, res) => {
@@ -45,19 +71,72 @@ router.get('/expenses', auth, async (req, res) => {
 // Profit/Loss
 router.get('/profit', auth, async (req, res) => {
   try {
-    const [months] = await sequelize.query(
-      `SELECT DATE_FORMAT(DATE_SUB(NOW(),INTERVAL n MONTH),'%Y-%m') as month FROM (SELECT 0 n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11) nums ORDER BY month`
-    )
+    const from = req.query.from || defaultLast3From()
+    const to   = req.query.to || defaultTo()
+    const months = getMonthKeys(from, to)
+
     const [sales] = await sequelize.query(
-      `SELECT DATE_FORMAT(order_date,'%Y-%m') as month, SUM(total_amount) as sales FROM orders WHERE status!='CANCELLED' AND order_date>=DATE_SUB(NOW(),INTERVAL 12 MONTH) GROUP BY DATE_FORMAT(order_date,'%Y-%m')`
+      `SELECT DATE_FORMAT(o.order_date,'%Y-%m') as month,
+              SUM((COALESCE(o.subtotal,0) - COALESCE(o.discount,0)) + COALESCE(o.delivery_charges,0) + COALESCE(o.other_charges,0)) as sales
+       FROM orders o
+       WHERE o.status!='CANCELLED' AND o.order_date BETWEEN ? AND ?
+       GROUP BY DATE_FORMAT(o.order_date,'%Y-%m')`,
+      { replacements:[from, to] }
     )
+
+    const [materialCosts] = await sequelize.query(
+      `SELECT DATE_FORMAT(o.order_date,'%Y-%m') as month,
+              SUM(COALESCE(p.material_cost,0) * COALESCE(oi.quantity,0)) as material_cost
+       FROM orders o
+       JOIN order_items oi ON oi.order_id=o.id
+       LEFT JOIN products p ON p.id=oi.product_id
+       WHERE o.status!='CANCELLED' AND o.order_date BETWEEN ? AND ?
+       GROUP BY DATE_FORMAT(o.order_date,'%Y-%m')`,
+      { replacements:[from, to] }
+    )
+
     const [expenses] = await sequelize.query(
-      `SELECT DATE_FORMAT(date,'%Y-%m') as month, SUM(amount) as expenses FROM expenses WHERE date>=DATE_SUB(NOW(),INTERVAL 12 MONTH) AND COALESCE(is_active,1)=1 GROUP BY DATE_FORMAT(date,'%Y-%m')`
+      `SELECT DATE_FORMAT(date,'%Y-%m') as month,
+              SUM(amount) as expenses
+       FROM expenses
+       WHERE date BETWEEN ? AND ?
+         AND COALESCE(is_active,1)=1
+         AND COALESCE(category,'OTHER')!='MATERIAL'
+       GROUP BY DATE_FORMAT(date,'%Y-%m')`,
+      { replacements:[from, to] }
     )
-    const sMap = Object.fromEntries(sales.map(r=>[r.month,parseFloat(r.sales||0)]))
-    const eMap = Object.fromEntries(expenses.map(r=>[r.month,parseFloat(r.expenses||0)]))
-    const monthly = months.map(({month}) => ({ month, sales:sMap[month]||0, expenses:eMap[month]||0, profit:(sMap[month]||0)-(eMap[month]||0) }))
-    res.json({ monthly })
+
+    const sMap = Object.fromEntries(sales.map(r => [r.month, parseFloat(r.sales || 0)]))
+    const mMap = Object.fromEntries(materialCosts.map(r => [r.month, parseFloat(r.material_cost || 0)]))
+    const eMap = Object.fromEntries(expenses.map(r => [r.month, parseFloat(r.expenses || 0)]))
+
+    const monthly = months.map(month => {
+      const revenue = sMap[month] || 0
+      const materialCost = mMap[month] || 0
+      const operatingExpenses = eMap[month] || 0
+      const grossProfit = revenue - materialCost
+      const netProfit = grossProfit - operatingExpenses
+
+      return {
+        month,
+        label: monthLabel(month),
+        sales: revenue,
+        materialCost,
+        grossProfit,
+        expenses: operatingExpenses,
+        netProfit,
+      }
+    })
+
+    const summary = monthly.reduce((acc, row) => ({
+      sales: acc.sales + row.sales,
+      materialCost: acc.materialCost + row.materialCost,
+      grossProfit: acc.grossProfit + row.grossProfit,
+      expenses: acc.expenses + row.expenses,
+      netProfit: acc.netProfit + row.netProfit,
+    }), { sales:0, materialCost:0, grossProfit:0, expenses:0, netProfit:0 })
+
+    res.json({ from, to, monthly, summary })
   } catch(err) { res.status(500).json({ error:err.message }) }
 })
 

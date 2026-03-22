@@ -5,6 +5,8 @@ import { generateInvoice } from '../../utils/invoice'
 
 const IC = ({ d, cls='w-4 h-4' }) => <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={d}/></svg>
 const STATUSES = ['', 'PENDING', 'IN_PRODUCTION', 'READY', 'YET_TO_DELIVER', 'DELIVERED', 'CANCELLED']
+const today = () => new Date().toISOString().split('T')[0]
+const defaultMonthStart = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([])
@@ -12,21 +14,32 @@ export default function AdminOrders() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [period, setPeriod] = useState('all')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const [customFrom, setCustomFrom] = useState(defaultMonthStart())
+  const [customTo, setCustomTo] = useState(today())
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [orderDetail, setOrderDetail] = useState(null)
   const [company, setCompany] = useState({})
 
   const load = () => {
+    setLoading(true)
     const params = {}
     if (period !== 'all' && period !== 'custom') {
       const now = new Date()
-      if (period === 'weekly') { const d = new Date(); d.setDate(d.getDate()-7); params.from = d.toISOString().split('T')[0]; params.to = now.toISOString().split('T')[0] }
+      if (period === 'weekly') {
+        const d = new Date(now)
+        const day = d.getDay()
+        const diff = day === 0 ? 6 : day - 1
+        d.setDate(d.getDate() - diff)
+        params.from = d.toISOString().split('T')[0]
+        params.to = now.toISOString().split('T')[0]
+      }
       if (period === 'monthly') { params.from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]; params.to = now.toISOString().split('T')[0] }
       if (period === '6months') { const d = new Date(); d.setMonth(d.getMonth()-6); params.from = d.toISOString().split('T')[0]; params.to = now.toISOString().split('T')[0] }
     }
-    if (period === 'custom' && customFrom) { params.from = customFrom; if (customTo) params.to = customTo }
+    if (period === 'custom') {
+      if (customFrom) params.from = customFrom
+      if (customTo) params.to = customTo
+    }
     api.get('/orders', { params }).then(r => setOrders(r.data)).catch(console.error).finally(() => setLoading(false))
   }
 
@@ -47,9 +60,9 @@ export default function AdminOrders() {
   }
 
   const exportExcel = () => {
-    const rows = [['Order #', 'Customer', 'Phone', 'Order Date', 'Delivery Date', 'Status', 'Payment', 'Total', 'Paid', 'Balance']]
-    filtered.forEach(o => rows.push([
-      o.order_number, o.customer_name, o.customer_phone || '',
+    const rows = [['S.No.', 'Order #', 'Customer', 'Phone', 'Order Date', 'Delivery Date', 'Status', 'Payment', 'Total', 'Paid', 'Balance']]
+    filtered.forEach((o, index) => rows.push([
+      index + 1, o.order_number, o.customer_name, o.customer_phone || '',
       o.order_date?.split('T')[0] || '', o.delivery_date?.split('T')[0] || '',
       o.status, o.payment_status, o.total_amount, o.amount_paid,
       o.total_amount - o.amount_paid
@@ -72,17 +85,17 @@ export default function AdminOrders() {
     .total{font-size:14px;font-weight:bold;text-align:right;margin-top:12px}
     @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
     <h1>Orders Report</h1>
-    <p style="color:#64748b;font-size:12px;margin-bottom:8px">Generated: ${new Date().toLocaleString('en-IN')} · ${filtered.length} orders</p>
-    <table><thead><tr><th>Order #</th><th>Customer</th><th>Date</th><th>Delivery</th><th>Status</th><th>Payment</th><th>Total</th><th>Paid</th><th>Balance</th></tr></thead>
-    <tbody>${filtered.map(o => `<tr>
-      <td><b>${o.order_number}</b></td><td>${o.customer_name}</td>
-      <td>${o.order_date?.split('T')[0]||''}</td><td>${o.delivery_date?.split('T')[0]||'—'}</td>
+    <p style="color:#64748b;font-size:12px;margin-bottom:8px">Generated: ${new Date().toLocaleString('en-IN')} | ${filtered.length} orders</p>
+    <table><thead><tr><th>S.No.</th><th>Order #</th><th>Customer</th><th>Date</th><th>Delivery</th><th>Status</th><th>Payment</th><th>Total</th><th>Paid</th><th>Balance</th></tr></thead>
+    <tbody>${filtered.map((o, index) => `<tr>
+      <td>${index + 1}</td><td><b>${o.order_number}</b></td><td>${o.customer_name}</td>
+      <td>${o.order_date?.split('T')[0] || ''}</td><td>${o.delivery_date?.split('T')[0] || '-'}</td>
       <td>${o.status.replace(/_/g,' ')}</td><td>${o.payment_status}</td>
-      <td>₹${Number(o.total_amount).toLocaleString('en-IN')}</td>
-      <td>₹${Number(o.amount_paid).toLocaleString('en-IN')}</td>
-      <td>₹${Number(o.total_amount-o.amount_paid).toLocaleString('en-IN')}</td>
+      <td>Rs. ${Number(o.total_amount).toLocaleString('en-IN')}</td>
+      <td>Rs. ${Number(o.amount_paid).toLocaleString('en-IN')}</td>
+      <td>Rs. ${Number(o.total_amount - o.amount_paid).toLocaleString('en-IN')}</td>
     </tr>`).join('')}</tbody></table>
-    <div class="total">Total Revenue: ₹${total.toLocaleString('en-IN')}</div>
+    <div class="total">Total Revenue: Rs. ${total.toLocaleString('en-IN')}</div>
     </body></html>`)
     w.document.close(); setTimeout(() => w.print(), 500)
   }
@@ -103,9 +116,9 @@ export default function AdminOrders() {
           <h1 className="page-title">Orders & Sales</h1>
           <p className="text-xs text-surface-400 mt-0.5">{orders.length} total orders</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={exportExcel} className="btn-secondary text-sm"><IC d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/> CSV</button>
-          <button onClick={exportPDF} className="btn-secondary text-sm"><IC d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/> PDF</button>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={exportExcel} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 text-sm font-semibold transition-colors"><IC d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/> Download Excel</button>
+          <button onClick={exportPDF} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 text-sm font-semibold transition-colors"><IC d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/> Download PDF</button>
         </div>
       </div>
 
@@ -134,10 +147,22 @@ export default function AdminOrders() {
           </button>
         ))}
         {period === 'custom' && (
-          <div className="flex gap-2 items-center">
-            <input type="date" className="input py-1.5 text-sm" value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
-            <span className="text-surface-400">→</span>
-            <input type="date" className="input py-1.5 text-sm" value={customTo} onChange={e => setCustomTo(e.target.value)} />
+          <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-surface-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 shadow-sm">
+            <label className="min-w-[170px] flex-1">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400 mb-1.5">From</span>
+              <input type="date" className="input h-11 text-sm" value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+            </label>
+            <label className="min-w-[170px] flex-1">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400 mb-1.5">To</span>
+              <input type="date" className="input h-11 text-sm" value={customTo} onChange={e => setCustomTo(e.target.value)} />
+            </label>
+            <button
+              type="button"
+              onClick={() => { setCustomFrom(defaultMonthStart()); setCustomTo(today()) }}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-primary-200 bg-primary-50 px-4 text-sm font-semibold text-primary-700 transition-colors hover:bg-primary-100"
+            >
+              This Month
+            </button>
           </div>
         )}
       </div>
@@ -158,11 +183,12 @@ export default function AdminOrders() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-surface-50 dark:bg-gray-800/50 border-b border-surface-100 dark:border-gray-800">
-                <tr>{['Order','Customer','Date','Delivery','Status','Payment','Total','Pending',''].map(h=><th key={h} className="table-th">{h}</th>)}</tr>
+                <tr>{['S.No.','Order','Customer','Date','Delivery','Status','Payment','Total','Pending',''].map(h=><th key={h} className="table-th">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-surface-100 dark:divide-gray-800">
-                {filtered.map(o => (
+                {filtered.map((o, index) => (
                   <tr key={o.id} className="table-row">
+                    <td className="table-td text-xs font-semibold text-surface-500">{index + 1}</td>
                     <td className="table-td font-mono text-xs text-primary-600 font-semibold">{o.order_number}</td>
                     <td className="table-td font-medium text-sm text-surface-900 dark:text-gray-100">{o.customer_name}</td>
                     <td className="table-td text-xs text-surface-400">{fmtDate(o.order_date)}</td>
@@ -173,7 +199,7 @@ export default function AdminOrders() {
                       {o.payment_status === 'PARTIAL' && <div className="text-xs text-surface-400 mt-0.5">{fmt(o.amount_paid)} paid</div>}
                     </td>
                     <td className="table-td font-semibold text-sm">{fmt(o.total_amount)}</td>
-                    <td className="table-td">{parseFloat(o.amount_paid||0) > 0 && parseFloat(o.total_amount) > parseFloat(o.amount_paid||0) ? <span style={{color:'var(--red)',fontWeight:700,fontSize:13}}>{fmt(parseFloat(o.total_amount)-parseFloat(o.amount_paid||0))}</span> : <span style={{color:'var(--green)',fontSize:12}}>✓</span>}</td>
+                    <td className="table-td">{parseFloat(o.amount_paid||0) > 0 && parseFloat(o.total_amount) > parseFloat(o.amount_paid||0) ? <span style={{color:'var(--red)',fontWeight:700,fontSize:13}}>{fmt(parseFloat(o.total_amount)-parseFloat(o.amount_paid||0))}</span> : <span className="text-green-600 text-xs font-semibold">Clear</span>}</td>
                     <td className="table-td">
                       <button onClick={() => openDetail(o)} className="btn-ghost p-1.5">
                         <IC d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
@@ -262,3 +288,5 @@ export default function AdminOrders() {
     </div>
   )
 }
+
+

@@ -11,6 +11,11 @@ const REPORT_TYPES = [
   { id:'payments',  label:'Payment Report',   color:'#0891b2', bg:'#ecfeff' },
 ]
 
+const defaultRange = () => ({
+  from: new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toISOString().split('T')[0],
+  to: new Date().toISOString().split('T')[0],
+})
+
 function DateRange({ from, to, onChange }) {
   return (
     <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
@@ -86,23 +91,29 @@ function generatePDF(type, data, range) {
   }
 
   if (type==='profit') {
-    const totalSales = data.monthly?.reduce((s,m)=>s+m.sales,0)||0
-    const totalExp   = data.monthly?.reduce((s,m)=>s+m.expenses,0)||0
+    const totalSales = data.summary?.sales||0
+    const totalMat   = data.summary?.materialCost||0
+    const totalGross = data.summary?.grossProfit||0
+    const totalExp   = data.summary?.expenses||0
+    const totalNet   = data.summary?.netProfit||0
     summaryHTML = `<div class="summary-grid">
       <div class="summary-card"><div class="s-val" style="color:#2563eb">${fmtM(totalSales)}</div><div class="s-lbl">Total Revenue</div></div>
-      <div class="summary-card"><div class="s-val" style="color:#dc2626">${fmtM(totalExp)}</div><div class="s-lbl">Total Expenses</div></div>
-      <div class="summary-card"><div class="s-val" style="color:${totalSales-totalExp>=0?'#16a34a':'#dc2626'}">${fmtM(totalSales-totalExp)}</div><div class="s-lbl">Net Profit</div></div>
+      <div class="summary-card"><div class="s-val" style="color:#d97706">${fmtM(totalMat)}</div><div class="s-lbl">Material Cost</div></div>
+      <div class="summary-card"><div class="s-val" style="color:${totalGross>=0?'#16a34a':'#dc2626'}">${fmtM(totalGross)}</div><div class="s-lbl">Gross Profit</div></div>
+      <div class="summary-card"><div class="s-val" style="color:#dc2626">${fmtM(totalExp)}</div><div class="s-lbl">Operating Expenses</div></div>
+      <div class="summary-card"><div class="s-val" style="color:${totalNet>=0?'#16a34a':'#dc2626'}">${fmtM(totalNet)}</div><div class="s-lbl">Net Profit</div></div>
     </div>`
     tableHTML = `<table>
-      <thead><tr><th>Month</th><th>Sales</th><th>Expenses</th><th>Profit</th><th>Margin</th></tr></thead>
+      <thead><tr><th>Month</th><th>Revenue</th><th>Material Cost</th><th>Gross Profit</th><th>Operating Expenses</th><th>Net Profit</th></tr></thead>
       <tbody>${(data.monthly||[]).map(m=>`<tr>
-        <td>${m.month}</td>
+        <td>${m.label || m.month}</td>
         <td class="num">${fmtM(m.sales)}</td>
+        <td class="num" style="color:#d97706">${fmtM(m.materialCost)}</td>
+        <td class="num" style="color:${m.grossProfit>=0?'#16a34a':'#dc2626'};font-weight:700">${fmtM(m.grossProfit)}</td>
         <td class="num red">${fmtM(m.expenses)}</td>
-        <td class="num" style="color:${m.profit>=0?'#16a34a':'#dc2626'};font-weight:700">${fmtM(m.profit)}</td>
-        <td class="num">${m.sales>0?(((m.profit/m.sales)*100).toFixed(1)+'%'):'—'}</td>
+        <td class="num" style="color:${m.netProfit>=0?'#16a34a':'#dc2626'};font-weight:700">${fmtM(m.netProfit)}</td>
       </tr>`).join('')}</tbody>
-      <tfoot><tr><td><strong>TOTAL</strong></td><td class="num"><strong>${fmtM(totalSales)}</strong></td><td class="num red"><strong>${fmtM(totalExp)}</strong></td><td class="num" style="color:${totalSales-totalExp>=0?'#16a34a':'#dc2626'};font-weight:700"><strong>${fmtM(totalSales-totalExp)}</strong></td><td></td></tr></tfoot>
+      <tfoot><tr><td><strong>TOTAL</strong></td><td class="num"><strong>${fmtM(totalSales)}</strong></td><td class="num"><strong>${fmtM(totalMat)}</strong></td><td class="num" style="color:${totalGross>=0?'#16a34a':'#dc2626'};font-weight:700"><strong>${fmtM(totalGross)}</strong></td><td class="num red"><strong>${fmtM(totalExp)}</strong></td><td class="num" style="color:${totalNet>=0?'#16a34a':'#dc2626'};font-weight:700"><strong>${fmtM(totalNet)}</strong></td></tr></tfoot>
     </table>`
   }
 
@@ -232,8 +243,8 @@ function generateExcel(type, data, range) {
     data.expenses?.forEach(e => rows.push([e.title,e.category,e.vendor_name||'',e.date,e.amount,e.tax_amount||0,e.description||e.notes||'']))
   }
   if (type==='profit') {
-    rows = [['Month','Sales','Expenses','Profit','Margin %']]
-    data.monthly?.forEach(m => rows.push([m.month,m.sales.toFixed(2),m.expenses.toFixed(2),m.profit.toFixed(2),(m.sales>0?((m.profit/m.sales)*100).toFixed(1):0)+'%']))
+    rows = [['Month','Revenue','Material Cost','Gross Profit','Operating Expenses','Net Profit']]
+    data.monthly?.forEach(m => rows.push([(m.label||m.month),m.sales.toFixed(2),m.materialCost.toFixed(2),m.grossProfit.toFixed(2),m.expenses.toFixed(2),m.netProfit.toFixed(2)]))
   }
   if (type==='inventory') {
     rows = [['Material','Unit','Quantity','Min Stock','Unit Price','Stock Value','Status']]
@@ -260,15 +271,15 @@ function generateExcel(type, data, range) {
 export default function Reports() {
   const toast   = useToast()
   const [active, setActive]   = useState(null)  // current report type
-  const [range,  setRange]    = useState({ from: new Date(new Date().getFullYear(),0,1).toISOString().split('T')[0], to: new Date().toISOString().split('T')[0] })
+  const [range,  setRange]    = useState(defaultRange())
   const [data,   setData]     = useState(null)
   const [loading,setLoading]  = useState(false)
 
-  const loadReport = async (type) => {
+  const loadReport = async (type, nextRange = range) => {
     setActive(type); setData(null); setLoading(true)
     try {
       const url = type==='profit' ? '/reports/profit' : `/reports/${type}`
-      const r   = await api.get(url, { params: range })
+      const r   = await api.get(url, { params: nextRange })
       setData(r.data)
     } catch(err) {
       toast(err.response?.data?.error || 'Failed to load report', 'error')
@@ -311,13 +322,15 @@ export default function Reports() {
     )
     if (active==='profit') return (
       <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-        <thead><tr>{['Month','Sales','Expenses','Profit'].map(h=><th key={h} className="table-th">{h}</th>)}</tr></thead>
+        <thead><tr>{['Month','Revenue','Material Cost','Gross Profit','Operating Expenses','Net Profit'].map(h=><th key={h} className="table-th">{h}</th>)}</tr></thead>
         <tbody>{(data.monthly||[]).map((m,i)=>(
           <tr key={i} className="table-row">
-            <td className="table-td" style={{ fontWeight:600 }}>{m.month}</td>
+            <td className="table-td" style={{ fontWeight:600 }}>{m.label || m.month}</td>
             <td className="table-td" style={{ color:'var(--primary)', fontWeight:600 }}>{fmt(m.sales)}</td>
+            <td className="table-td" style={{ color:'#d97706' }}>{fmt(m.materialCost)}</td>
+            <td className="table-td" style={{ color:m.grossProfit>=0?'var(--green)':'var(--red)', fontWeight:700, fontSize:14 }}>{fmt(m.grossProfit)}</td>
             <td className="table-td" style={{ color:'var(--red)' }}>{fmt(m.expenses)}</td>
-            <td className="table-td" style={{ color:m.profit>=0?'var(--green)':'var(--red)', fontWeight:700, fontSize:14 }}>{fmt(m.profit)}</td>
+            <td className="table-td" style={{ color:m.netProfit>=0?'var(--green)':'var(--red)', fontWeight:700, fontSize:14 }}>{fmt(m.netProfit)}</td>
           </tr>
         ))}</tbody>
       </table>
@@ -404,7 +417,7 @@ export default function Reports() {
       {/* Date Range + Export (shown when report is active) */}
       {active && (
         <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', justifyContent:'space-between' }}>
-          <DateRange from={range.from} to={range.to} onChange={newRange => { setRange(newRange); loadReport(active) }} />
+          <DateRange from={range.from} to={range.to} onChange={newRange => { setRange(newRange); if (active) loadReport(active, newRange) }} />
           <div style={{ display:'flex', gap:8 }}>
             <button onClick={() => loadReport(active)} className="btn btn-secondary" style={{ fontSize:12 }}>↻ Refresh</button>
             {data && <>
@@ -439,8 +452,8 @@ export default function Reports() {
             </div>
           ))}
           {active==='profit' && (() => {
-            const s=data.monthly?.reduce((x,m)=>x+m.sales,0)||0, e=data.monthly?.reduce((x,m)=>x+m.expenses,0)||0
-            return [['Revenue',fmt(s),'var(--primary)'],['Expenses',fmt(e),'var(--red)'],['Net Profit',fmt(s-e),s-e>=0?'var(--green)':'var(--red)']].map(([l,v,c])=>(
+            const s=data.summary?.sales||0, m=data.summary?.materialCost||0, g=data.summary?.grossProfit||0, e=data.summary?.expenses||0, n=data.summary?.netProfit||0
+            return [['Revenue',fmt(s),'var(--primary)'],['Material Cost',fmt(m),'#d97706'],['Gross Profit',fmt(g),g>=0?'var(--green)':'var(--red)'],['Operating Expenses',fmt(e),'var(--red)'],['Net Profit',fmt(n),n>=0?'var(--green)':'var(--red)']].map(([l,v,c])=>(
               <div key={l} className="card" style={{ padding:'12px 14px' }}>
                 <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
                 <div style={{ fontSize:10, fontWeight:700, color:'var(--text3)', textTransform:'uppercase', marginTop:2 }}>{l}</div>
@@ -471,3 +484,4 @@ export default function Reports() {
     </div>
   )
 }
+
