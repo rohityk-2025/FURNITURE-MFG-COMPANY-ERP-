@@ -197,7 +197,7 @@ export default function ManagerOrders() {
           <>
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr>{['Order #','Customer','Date','Status','Payment','Total',''].map(h=><th key={h} className="table-th">{h}</th>)}</tr></thead>
+              <thead><tr>{['Order #','Customer','Date','Status','Payment','Total','Pending',''].map(h=><th key={h} className="table-th">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-surface-100 dark:divide-gray-800">
                 {filtered.map(o => (
                   <tr key={o.id} className="table-row cursor-pointer" onClick={()=>openDetail(o)}>
@@ -207,6 +207,7 @@ export default function ManagerOrders() {
                     <td className="table-td"><StatusBadge status={o.status}/></td>
                     <td className="table-td"><StatusBadge status={o.payment_status}/></td>
                     <td className="table-td font-semibold">{fmt(o.total_amount)}</td>
+                    <td className="table-td">{parseFloat(o.amount_paid||0)>0 && parseFloat(o.total_amount)>parseFloat(o.amount_paid||0) ? <span style={{color:'var(--red)',fontWeight:800,fontSize:13}}>{fmt(parseFloat(o.total_amount)-parseFloat(o.amount_paid||0))}</span> : <span style={{color:'var(--green)',fontSize:12}}>✓</span>}</td>
                     <td className="table-td">
                       <button onClick={e=>{e.stopPropagation();openEdit(o)}} className="btn-ghost !p-1.5">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>

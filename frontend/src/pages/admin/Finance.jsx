@@ -1,516 +1,312 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+import { useState, useEffect, useCallback } from 'react'
 import api from '../../utils/api'
-import { LoadingPage, StatusBadge, PageHeader, Tabs, fmt, fmtDate } from '../../components/ui'
-import { useToast } from '../../components/ui'
+import { LoadingPage, fmt, fmtDate, Modal, useToast } from '../../components/ui'
 
-const COLORS = ['#2563eb','#7c3aed','#10b981','#f59e0b','#ef4444','#06b6d4']
+const PERIODS = [{ id:'week',label:'Week'},{ id:'month',label:'Month'},{ id:'3m',label:'3 Months'},{ id:'6m',label:'6 Months'},{ id:'year',label:'Year'},{ id:'custom',label:'Custom'}]
 
-const CustomTip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-surface-900 text-white px-3 py-2 rounded-xl text-xs shadow-modal">
-      <p className="font-semibold mb-1">{label}</p>
-      {payload.map((p, i) => <p key={i} style={{ color: p.color }}>{p.name}: {typeof p.value === 'number' && p.value > 100 ? fmt(p.value) : p.value}</p>)}
-    </div>
-  )
+function getRange(period) {
+  const now = new Date(); const to = now.toISOString().split('T')[0]; let from
+  if (period==='week')  from = new Date(now-7*864e5).toISOString().split('T')[0]
+  if (period==='month') from = new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0]
+  if (period==='3m')    from = new Date(now-90*864e5).toISOString().split('T')[0]
+  if (period==='6m')    from = new Date(now-180*864e5).toISOString().split('T')[0]
+  if (period==='year')  from = new Date(now.getFullYear(),0,1).toISOString().split('T')[0]
+  return { from:from||to, to }
 }
 
-const emptyExpense = { title: '', category: 'OTHER', amount: '', date: new Date().toISOString().split('T')[0], notes: '' }
-
-export default function AdminFinance() {
-  const toast = useToast()
-  const printRef = useRef(null)
+export default function Finance() {
+  const toast  = useToast()
+  const [tab,     setTab]     = useState('payments')
+  const [period,  setPeriod]  = useState('month')
+  const [custom,  setCustom]  = useState({ from:new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0], to:new Date().toISOString().split('T')[0] })
   const [summary, setSummary] = useState(null)
-  const [expenses, setExpenses] = useState([])
-  const [workerPayments, setWorkerPayments] = useState([])
+  const [jobs,    setJobs]    = useState([])
+  const [advances,setAdvances]= useState([])
+  const [workers, setWorkers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('overview')
-  const [expModal, setExpModal] = useState(false)
-  const [expForm, setExpForm] = useState(emptyExpense)
-  const [saving, setSaving] = useState(false)
-  const [workerDetail, setWorkerDetail] = useState(null)
-  const [workerJobs, setWorkerJobs] = useState([])
-  const [payModal, setPayModal] = useState(null)
-  const [payAmount, setPayAmount] = useState('')
-  const [advModal, setAdvModal] = useState(null)
-  const [advAmount, setAdvAmount] = useState('')
-  const [dateFilter, setDateFilter] = useState('monthly')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const [payModal,setPayModal]= useState(null)
+  const [payAmt,  setPayAmt]  = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [advModal,setAdvModal]= useState(false)
+  const [advForm, setAdvForm] = useState({ worker_id:'', amount:'', payment_date:new Date().toISOString().split('T')[0], note:'' })
+  const [editAdv, setEditAdv] = useState(null)
 
-  const getDateRange = useCallback(() => {
-    const now = new Date()
-    const fmt = d => d.toISOString().split('T')[0]
-    if (dateFilter === 'weekly') {
-      const start = new Date(now); start.setDate(now.getDate() - 7)
-      return { from: fmt(start), to: fmt(now) }
-    }
-    if (dateFilter === 'monthly') {
-      return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(now) }
-    }
-    if (dateFilter === 'yearly') {
-      return { from: fmt(new Date(now.getFullYear(), 0, 1)), to: fmt(now) }
-    }
-    if (dateFilter === '6months') {
-      const start = new Date(now); start.setMonth(now.getMonth() - 6)
-      return { from: fmt(start), to: fmt(now) }
-    }
-    return { from: customFrom, to: customTo }
-  }, [dateFilter, customFrom, customTo])
-
-  const loadAll = useCallback(async () => {
-    const range = getDateRange()
-    if (dateFilter === 'custom' && (!customFrom || !customTo)) return
+  const loadAll = useCallback(async (p, c) => {
     setLoading(true)
+    const range = p==='custom' ? c : getRange(p)
     try {
-      const [sumRes, expRes, wpRes] = await Promise.all([
-        api.get('/finance/summary', { params: range }),
-        api.get('/finance/expenses', { params: range }),
-        api.get('/finance/workers-payment')
+      // Load each independently so one failure doesn't block others
+      const [sRes, jRes, advRes, wRes] = await Promise.allSettled([
+        api.get('/finance/summary', { params:range }),
+        api.get('/finance/workers-payment'),
+        api.get('/finance/advances'),
+        api.get('/workers'),
       ])
-      setSummary(sumRes.data)
-      setExpenses(expRes.data)
-      setWorkerPayments(wpRes.data)
-    } catch (err) { toast('Load failed', 'error') }
+      if (sRes.status==='fulfilled')   setSummary(sRes.value.data)
+      if (jRes.status==='fulfilled')   setJobs(jRes.value.data)
+      if (advRes.status==='fulfilled') setAdvances(advRes.value.data)
+      if (wRes.status==='fulfilled')   setWorkers(wRes.value.data)
+
+      // Log any failures for debugging
+      if (jRes.status==='rejected')   console.error('workers-payment:', jRes.reason?.response?.data?.error)
+      if (advRes.status==='rejected') console.error('advances:', advRes.reason?.response?.data?.error)
+    } catch(e) { console.error(e) }
     finally { setLoading(false) }
-  }, [getDateRange, dateFilter, customFrom, customTo])
+  }, [])
 
-  useEffect(() => { loadAll() }, [loadAll])
+  useEffect(() => { loadAll(period, custom) }, [period, custom, loadAll])
 
-  const openWorkerDetail = async (w) => {
-    setWorkerDetail(w)
-    const r = await api.get('/work-assignments', { params: { worker_id: w.id } })
-    setWorkerJobs(r.data)
-  }
+  const reload = () => loadAll(period, custom)
 
-  const handleAddExpense = async (e) => {
+  const handlePay = async (e) => {
     e.preventDefault(); setSaving(true)
     try {
-      await api.post('/finance/expenses', expForm)
-      toast('Expense added')
-      setExpModal(false); setExpForm(emptyExpense)
-      loadAll()
-    } catch { toast('Failed', 'error') }
+      await api.post(`/finance/pay-job/${payModal.id}`, { amount:parseFloat(payAmt) })
+      const rem = parseFloat(payModal.total_commission) - parseFloat(payAmt)
+      toast(rem>0 ? `Paid ${fmt(payAmt)} · ${fmt(rem)} still pending` : 'Paid in full!')
+      setPayModal(null); reload()
+    } catch(err) { toast(err.response?.data?.error||'Failed','error') }
     finally { setSaving(false) }
   }
 
-  const handlePayWorker = async (job) => {
-    if (!payAmount) return
-    setSaving(true)
+  const handleAdvance = async (e) => {
+    e.preventDefault(); setSaving(true)
     try {
-      const amount = parseFloat(payAmount)
-      const expected = job.commission * job.quantity
-      const isPartial = amount < expected
-      await api.post(`/work-assignments/${job.id}/pay`, {
-        amount,
-        payment_type: isPartial ? 'PARTIAL' : 'FULL',
-        notes: isPartial ? `Partial payment. Remaining: ${fmt(expected - amount)}` : ''
-      })
-      toast(isPartial ? 'Partial payment recorded' : 'Payment recorded ✓')
-      setPayModal(null); setPayAmount('')
-      if (workerDetail) {
-        const r = await api.get('/work-assignments', { params: { worker_id: workerDetail.id } })
-        setWorkerJobs(r.data)
-      }
-      loadAll()
-    } catch { toast('Payment failed', 'error') }
+      await api.post('/finance/advance', advForm)
+      toast('Advance recorded'); setAdvModal(false)
+      setAdvForm({ worker_id:'', amount:'', payment_date:new Date().toISOString().split('T')[0], note:'' })
+      reload()
+    } catch(err) { toast(err.response?.data?.error||'Failed','error') }
     finally { setSaving(false) }
   }
 
-  const handleAdvance = async () => {
-    if (!advAmount || !advModal) return
-    setSaving(true)
-    try {
-      await api.post('/finance/advance', { worker_id: advModal.id, amount: parseFloat(advAmount), payment_date: new Date().toISOString().split('T')[0] })
-      toast('Advance payment recorded')
-      setAdvModal(null); setAdvAmount('')
-      loadAll()
-    } catch { toast('Failed', 'error') }
+  const handleEditAdv = async (e) => {
+    e.preventDefault(); setSaving(true)
+    try { await api.put(`/finance/advance/${editAdv.id}`, editAdv); toast('Updated'); setEditAdv(null); reload() }
+    catch(err) { toast('Failed','error') }
     finally { setSaving(false) }
   }
 
-  // PDF export
-  const exportPDF = () => {
-    const range = getDateRange()
-    const w = window.open('', '_blank')
-    const totalSales = summary?.sales?.total || 0
-    const totalExp = summary?.expenses?.total || 0
-    const profit = totalSales - totalExp
+  const unpaid = jobs.filter(j => parseFloat(j.remaining||0) > 0)
+  const paid   = jobs.filter(j => parseFloat(j.remaining||0) <= 0 && j.is_paid)
+  const totalPending = unpaid.reduce((s,j)=>s+parseFloat(j.remaining||j.total_commission||0),0)
 
-    w.document.write(`<!DOCTYPE html><html><head><title>Finance Report</title>
-    <style>
-      body{font-family:Arial,sans-serif;padding:32px;color:#1e293b;max-width:900px;margin:0 auto}
-      h1{color:#2563eb;font-size:28px;margin-bottom:4px}
-      .subtitle{color:#64748b;font-size:14px;margin-bottom:32px}
-      .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
-      .card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px}
-      .card-val{font-size:22px;font-weight:800;color:#1e293b}
-      .card-lbl{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
-      table{width:100%;border-collapse:collapse;margin-top:24px}
-      th{background:#f1f5f9;text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:#64748b;letter-spacing:.05em}
-      td{padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:13px}
-      .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-      .green{background:#f0fdf4;color:#15803d}.red{background:#fef2f2;color:#b91c1c}.yellow{background:#fffbeb;color:#b45309}
-      @media print{body{padding:16px}}
-    </style></head><body>
-    <h1>Finance Report</h1>
-    <div class="subtitle">Period: ${range.from} to ${range.to} · Generated: ${new Date().toLocaleString('en-IN')}</div>
-    <div class="cards">
-      <div class="card"><div class="card-val">₹${Number(totalSales).toLocaleString('en-IN')}</div><div class="card-lbl">Total Sales</div></div>
-      <div class="card"><div class="card-val">₹${Number(summary?.sales?.received || 0).toLocaleString('en-IN')}</div><div class="card-lbl">Received</div></div>
-      <div class="card"><div class="card-val">₹${Number(totalExp).toLocaleString('en-IN')}</div><div class="card-lbl">Expenses</div></div>
-      <div class="card"><div class="card-val" style="color:${profit>=0?'#15803d':'#b91c1c'}">₹${Number(profit).toLocaleString('en-IN')}</div><div class="card-lbl">Net Profit</div></div>
-    </div>
-    <h2 style="font-size:18px;margin-bottom:12px">Expense Details</h2>
-    <table>
-      <thead><tr><th>Title</th><th>Category</th><th>Amount</th><th>Date</th></tr></thead>
-      <tbody>${expenses.map(e => `
-        <tr><td>${e.title}</td><td>${e.category}</td><td>₹${Number(e.amount).toLocaleString('en-IN')}</td><td>${new Date(e.date).toLocaleDateString('en-IN')}</td></tr>
-      `).join('')}</tbody>
-    </table>
-    </body></html>`)
-    w.document.close()
-    setTimeout(() => w.print(), 600)
-  }
+  const Btn = ({ id, label }) => (
+    <button onClick={()=>setTab(id)} style={{ padding:'6px 14px', borderRadius:6, fontSize:12, fontWeight:600, border:'none', cursor:'pointer', background:tab===id?'var(--card)':'transparent', color:tab===id?'var(--primary)':'var(--text2)', boxShadow:tab===id?'var(--shadow)':'none', transition:'all 0.12s' }}>{label}</button>
+  )
 
-  const monthlyData = (summary?.monthlySales || []).map(s => {
-    const exp = (summary?.monthlyExpenses || []).find(e => e.month === s.month)
-    return { month: s.month, Sales: parseFloat(s.sales || 0), Expenses: parseFloat(exp?.expenses || 0) }
-  })
-
-  const expByCategory = (summary?.expenses?.byCategory || []).map(e => ({ name: e.category, value: parseFloat(e.total_expenses || 0) }))
-
-  if (loading && !summary) return <LoadingPage />
+  if (loading) return <LoadingPage />
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <PageHeader
-        title="Finance"
-        subtitle="Revenue, expenses and worker payments"
-        action={
-          <div className="flex flex-wrap gap-2">
-            <button onClick={exportPDF} className="btn-secondary">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              Export PDF
-            </button>
-            <button onClick={() => { setExpForm(emptyExpense); setExpModal(true) }} className="btn-primary">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Add Expense
-            </button>
-          </div>
-        }
-      />
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }} className="animate-fade-in">
+      <div>
+        <h1 className="page-title">Finance</h1>
+        <p style={{ fontSize:12, color:'var(--text3)', marginTop:3 }}>Financial overview and worker payments</p>
+      </div>
 
-      {/* Date Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {[['weekly','Weekly'],['monthly','Monthly'],['6months','6 Months'],['yearly','Yearly'],['custom','Custom']].map(([id, label]) => (
-          <button key={id} onClick={() => setDateFilter(id)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all min-h-[40px] ${dateFilter === id ? 'bg-primary-500 text-white shadow-blue' : 'bg-white border border-surface-200 text-surface-600 hover:bg-surface-50'}`}>
-            {label}
+      {/* Period filter */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+        {PERIODS.map(f => (
+          <button key={f.id} onClick={()=>setPeriod(f.id)}
+            style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:`1px solid ${period===f.id?'var(--primary)':'var(--border)'}`, cursor:'pointer', background:period===f.id?'var(--primary-bg)':'var(--card)', color:period===f.id?'var(--primary)':'var(--text2)', transition:'all 0.12s' }}>
+            {f.label}
           </button>
         ))}
-        {dateFilter === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <input type="date" className="input py-2 text-sm" value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
-            <span className="text-surface-400">→</span>
-            <input type="date" className="input py-2 text-sm" value={customTo} onChange={e => setCustomTo(e.target.value)} />
-            <button onClick={loadAll} className="btn-primary py-2 px-4 text-sm">Apply</button>
+        {period==='custom' && (
+          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+            <input type="date" className="input" style={{ width:'auto' }} value={custom.from} onChange={e=>setCustom(p=>({...p,from:e.target.value}))} />
+            <span style={{ color:'var(--text3)' }}>→</span>
+            <input type="date" className="input" style={{ width:'auto' }} value={custom.to} onChange={e=>setCustom(p=>({...p,to:e.target.value}))} />
           </div>
         )}
       </div>
 
-      <Tabs active={tab} onChange={setTab} tabs={[
-        { id: 'overview', label: 'Overview' },
-        { id: 'workers',  label: 'Worker Payments' },
-        { id: 'expenses', label: 'All Expenses' },
-      ]} />
-
-      {tab === 'overview' && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Total Sales',    value: fmt(summary?.sales?.total),    color: 'text-primary-600',   bg: 'bg-primary-50' },
-              { label: 'Received',       value: fmt(summary?.sales?.received), color: 'text-green-600',     bg: 'bg-green-50' },
-              { label: 'Total Expenses', value: fmt(summary?.expenses?.total), color: 'text-red-500',       bg: 'bg-red-50' },
-              { label: 'Net Profit',     value: fmt(summary?.profit),          color: (summary?.profit||0) >= 0 ? 'text-green-600' : 'text-red-500', bg: (summary?.profit||0) >= 0 ? 'bg-green-50' : 'bg-red-50' },
-            ].map(item => (
-              <div key={item.label} className={`card p-5 ${item.bg} border-transparent`}>
-                <div className={`text-2xl font-bold ${item.color}`}>{item.value}</div>
-                <div className="text-xs font-semibold text-surface-500 uppercase tracking-wide mt-1">{item.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-4">
-            <div className="card p-5 lg:col-span-2">
-              <h3 className="section-title mb-4">Sales vs Expenses</h3>
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={monthlyData} margin={{ left: -15, right: 5 }} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTip />} />
-                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                  <Bar dataKey="Sales" fill="#2563eb" radius={[6,6,0,0]} maxBarSize={28} />
-                  <Bar dataKey="Expenses" fill="#7c3aed" radius={[6,6,0,0]} maxBarSize={28} />
-                </BarChart>
-              </ResponsiveContainer>
+      {/* KPI */}
+      {summary && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))', gap:10 }}>
+          {[['Sales',fmt(summary.sales?.total||0),'var(--primary)'],['Received',fmt(summary.sales?.received||0),'var(--green)'],['Expenses',fmt(summary.expenses?.total||0),'var(--red)'],['Profit',fmt((summary.sales?.total||0)-(summary.expenses?.total||0)),'var(--secondary)'],['Worker Due',fmt(totalPending),'var(--orange)']].map(([l,v,c])=>(
+            <div key={l} className="card" style={{ padding:14 }}>
+              <div style={{ fontSize:19, fontWeight:800, color:c }}>{v}</div>
+              <div style={{ fontSize:10, fontWeight:700, color:'var(--text3)', textTransform:'uppercase', marginTop:2 }}>{l}</div>
             </div>
-            <div className="card p-5">
-              <h3 className="section-title mb-4">Expense Breakdown</h3>
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie data={expByCategory} cx="50%" cy="45%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
-                    {expByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={v => fmt(v)} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
-      {tab === 'workers' && (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-surface-50 border-b border-surface-100">
-                <tr>
-                  <th className="table-th">Worker</th>
-                  <th className="table-th">Jobs</th>
-                  <th className="table-th">Total Earned</th>
-                  <th className="table-th">Paid</th>
-                  <th className="table-th">Pending</th>
-                  <th className="table-th">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-100">
-                {workerPayments.map(w => (
-                  <tr key={w.id} className="hover:bg-surface-50 transition-colors">
-                    <td className="table-td">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-primary-100 text-primary-700 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0">{w.name.charAt(0)}</div>
-                        <div>
-                          <div className="font-semibold text-surface-900 text-sm">{w.name}</div>
-                          <div className="text-xs text-surface-400">{w.skill || '—'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="table-td text-center">{w.total_assignments}</td>
-                    <td className="table-td font-semibold">{fmt(w.total_earned)}</td>
-                    <td className="table-td text-green-600 font-semibold">{fmt(w.total_paid)}</td>
-                    <td className="table-td">
-                      {parseFloat(w.pending_payment) > 0
-                        ? <span className="font-bold text-amber-600">{fmt(w.pending_payment)}</span>
-                        : <span className="text-surface-300">—</span>}
-                    </td>
-                    <td className="table-td">
-                      <div className="flex gap-2">
-                        <button onClick={() => openWorkerDetail(w)} className="btn-secondary !py-1.5 !px-3 text-xs">View Jobs</button>
-                        <button onClick={() => { setAdvModal(w); setAdvAmount('') }} className="btn-purple !py-1.5 !px-3 text-xs">Advance</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {workerPayments.length === 0 && (
-                  <tr><td colSpan={6} className="table-td text-center text-surface-400 py-8">No workers found</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+      {/* Tabs */}
+      <div style={{ display:'flex', gap:3, background:'var(--bg2)', padding:3, borderRadius:8, width:'fit-content' }}>
+        <Btn id="payments" label="Worker Payments" />
+        <Btn id="advances" label="Advance Payments" />
+      </div>
 
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-3 p-3">
-            {workerPayments.map(w => (
-              <div key={w.id} className="card p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary-100 text-primary-700 rounded-xl flex items-center justify-center font-bold">{w.name.charAt(0)}</div>
-                    <div>
-                      <div className="font-semibold">{w.name}</div>
-                      <div className="text-xs text-surface-400">{w.skill}</div>
-                    </div>
-                  </div>
-                  {parseFloat(w.pending_payment) > 0 && <span className="badge badge-yellow">{fmt(w.pending_payment)}</span>}
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-surface-50 rounded-lg p-2"><div className="font-bold text-sm">{w.total_assignments}</div><div className="text-xs text-surface-400">Jobs</div></div>
-                  <div className="bg-green-50 rounded-lg p-2"><div className="font-bold text-sm text-green-600">{fmt(w.total_paid)}</div><div className="text-xs text-surface-400">Paid</div></div>
-                  <div className="bg-amber-50 rounded-lg p-2"><div className="font-bold text-sm text-amber-600">{fmt(w.pending_payment)}</div><div className="text-xs text-surface-400">Due</div></div>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => openWorkerDetail(w)} className="btn-secondary flex-1 text-sm !py-2">View Jobs</button>
-                  <button onClick={() => { setAdvModal(w); setAdvAmount('') }} className="btn-purple flex-1 text-sm !py-2">Advance</button>
-                </div>
+      {/* Worker Payments */}
+      {tab==='payments' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {unpaid.length>0 && (
+            <div className="card" style={{ overflow:'hidden' }}>
+              <div style={{ padding:'10px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between' }}>
+                <span style={{ fontWeight:700, fontSize:13, color:'var(--red)' }}>Pending ({unpaid.length}) — Due: {fmt(totalPending)}</span>
               </div>
-            ))}
-          </div>
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead><tr>{['Worker','Job','Commission','Paid','Pending','Status',''].map(h=><th key={h} className="table-th">{h}</th>)}</tr></thead>
+                  <tbody>
+                    {unpaid.map(j => (
+                      <tr key={j.id} className="table-row">
+                        <td className="table-td" style={{ fontWeight:600 }}>{j.worker_name}</td>
+                        <td className="table-td" style={{ fontSize:12, color:'var(--text3)' }}>{j.product_name} × {j.quantity}</td>
+                        <td className="table-td">{fmt(j.total_commission)}</td>
+                        <td className="table-td" style={{ color:'var(--green)', fontWeight:600 }}>{fmt(j.paid||0)}</td>
+                        <td className="table-td" style={{ color:'var(--red)', fontWeight:700 }}>{fmt(j.remaining)}</td>
+                        <td className="table-td">{parseFloat(j.paid||0)>0?<span className="badge-yellow">Partial</span>:<span className="badge-red">Unpaid</span>}</td>
+                        <td className="table-td">
+                          <button onClick={()=>{ setPayModal(j); setPayAmt(String(j.remaining)) }} className="btn btn-primary" style={{ fontSize:11, padding:'4px 10px', minHeight:28 }}>Pay</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {paid.length>0 && (
+            <div className="card" style={{ overflow:'hidden' }}>
+              <div style={{ padding:'10px 14px', borderBottom:'1px solid var(--border)' }}>
+                <span style={{ fontWeight:700, fontSize:13 }}>Paid Jobs ({paid.length})</span>
+              </div>
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead><tr>{['Worker','Job','Commission','Date','Status'].map(h=><th key={h} className="table-th">{h}</th>)}</tr></thead>
+                  <tbody>
+                    {paid.map(j => (
+                      <tr key={j.id} className="table-row">
+                        <td className="table-td" style={{ fontWeight:600 }}>{j.worker_name}</td>
+                        <td className="table-td" style={{ fontSize:12 }}>{j.product_name} × {j.quantity}</td>
+                        <td className="table-td" style={{ fontWeight:600 }}>{fmt(j.total_commission)}</td>
+                        <td className="table-td" style={{ fontSize:12, color:'var(--text3)' }}>{fmtDate(j.completed_date)}</td>
+                        <td className="table-td"><span className="badge-green">Paid</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {jobs.length===0 && <div className="card" style={{ padding:40, textAlign:'center', color:'var(--text3)' }}>No completed jobs found</div>}
         </div>
       )}
 
-      {tab === 'expenses' && (
-        <div className="card overflow-hidden">
-          <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-surface-50 border-b border-surface-100">
-                <tr>
-                  <th className="table-th">Title</th>
-                  <th className="table-th">Category</th>
-                  <th className="table-th">Amount</th>
-                  <th className="table-th">Date</th>
-                  <th className="table-th">Added By</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-100">
-                {expenses.map(e => (
-                  <tr key={e.id} className="hover:bg-surface-50">
-                    <td className="table-td font-medium">{e.title}</td>
-                    <td className="table-td"><StatusBadge status={e.category} /></td>
-                    <td className="table-td font-semibold text-red-500">{fmt(e.amount)}</td>
-                    <td className="table-td text-xs text-surface-400">{fmtDate(e.date)}</td>
-                    <td className="table-td text-surface-500 text-xs">{e.created_by_name || '—'}</td>
-                  </tr>
-                ))}
-                {expenses.length === 0 && <tr><td colSpan={5} className="table-td text-center text-surface-400 py-8">No expenses recorded</td></tr>}
-              </tbody>
-            </table>
+      {/* Advances */}
+      {tab==='advances' && (
+        <div className="card" style={{ overflow:'hidden' }}>
+          <div style={{ padding:'10px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <span style={{ fontWeight:700, fontSize:13 }}>Advance Payments</span>
+            <button onClick={()=>setAdvModal(true)} className="btn btn-primary" style={{ fontSize:12 }}>+ Add Advance</button>
           </div>
-          {/* Mobile */}
-          <div className="sm:hidden space-y-3 p-3">
-            {expenses.map(e => (
-              <div key={e.id} className="card p-4 space-y-2">
-                <div className="flex justify-between items-start">
-                  <div className="font-semibold text-surface-900 text-sm">{e.title}</div>
-                  <div className="font-bold text-red-500">{fmt(e.amount)}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={e.category} />
-                  <span className="text-xs text-surface-400">{fmtDate(e.date)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Worker Detail Drawer */}
-      {workerDetail && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="fixed inset-0 bg-black/40" onClick={() => { setWorkerDetail(null); setWorkerJobs([]) }} />
-          <div className="relative w-full max-w-xl bg-white shadow-2xl flex flex-col animate-slide-in">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100 sticky top-0 bg-white z-10">
-              <div>
-                <h3 className="section-title">{workerDetail.name}</h3>
-                <p className="text-xs text-surface-400">Pending: <span className="text-amber-600 font-bold">{fmt(workerDetail.pending_payment)}</span></p>
-              </div>
-              <button onClick={() => { setWorkerDetail(null); setWorkerJobs([]) }} className="w-8 h-8 rounded-lg hover:bg-surface-100 flex items-center justify-center">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
+          {advances.length===0 ? (
+            <div style={{ padding:32, textAlign:'center', color:'var(--text3)', fontSize:13 }}>No advance records</div>
+          ) : (
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead><tr>{['Worker','Advance Taken','Remaining','Note','Date',''].map(h=><th key={h} className="table-th">{h}</th>)}</tr></thead>
+                <tbody>
+                  {advances.map(a => (
+                    <tr key={a.id} className="table-row">
+                      <td className="table-td" style={{ fontWeight:600 }}>{a.worker_name}</td>
+                      <td className="table-td" style={{ fontWeight:600 }}>{fmt(a.amount)}</td>
+                      <td className="table-td"><span style={{ fontWeight:700, color:parseFloat(a.remaining)>0?'var(--red)':'var(--green)' }}>{fmt(a.remaining)}</span></td>
+                      <td className="table-td" style={{ fontSize:12, color:'var(--text3)' }}>{a.note||'—'}</td>
+                      <td className="table-td" style={{ fontSize:12, color:'var(--text3)' }}>{fmtDate(a.payment_date)}</td>
+                      <td className="table-td"><button onClick={()=>setEditAdv({...a})} className="btn btn-secondary" style={{ fontSize:11, padding:'3px 8px', minHeight:26 }}>Edit</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="flex-1 overflow-y-auto p-5">
-              <div className="space-y-3">
-                {workerJobs.map(j => (
-                  <div key={j.id} className="card p-4 flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm truncate">{j.custom_product_name || j.product_name_db}</div>
-                      <div className="text-xs text-surface-400 mt-0.5">Qty: {j.quantity} · Commission: {fmt(j.commission * j.quantity)}</div>
-                      <div className="text-xs text-surface-400">{fmtDate(j.created_at)}</div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <StatusBadge status={j.status} />
-                      {j.is_paid
-                        ? <span className="badge badge-green text-xs">Paid {j.paid_date ? fmtDate(j.paid_date) : ''}</span>
-                        : j.status === 'COMPLETED'
-                          ? <button onClick={() => { setPayModal(j); setPayAmount(String(j.commission * j.quantity)) }}
-                              className="btn-primary !py-1 !px-3 text-xs">Pay Now</button>
-                          : <span className="badge badge-gray text-xs">Pending Work</span>
-                      }
-                    </div>
-                  </div>
-                ))}
-                {workerJobs.length === 0 && <p className="text-center text-surface-400 py-8">No assignments</p>}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* Pay Modal */}
       {payModal && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setPayModal(null)}>
-          <div className="modal-box sm:max-w-sm">
-            <div className="p-6">
-              <h3 className="section-title mb-4">Record Payment</h3>
-              <div className="space-y-3 mb-5">
-                <div className="bg-surface-50 rounded-xl p-3 text-sm space-y-1">
-                  <div className="flex justify-between"><span className="text-surface-500">Job:</span><span className="font-semibold">{payModal.custom_product_name || payModal.product_name_db}</span></div>
-                  <div className="flex justify-between"><span className="text-surface-500">Expected:</span><span className="font-semibold">{fmt(payModal.commission * payModal.quantity)}</span></div>
-                </div>
-                <div>
-                  <label className="label">Amount to Pay (₹)</label>
-                  <input className="input text-lg font-bold" type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} min={0} autoFocus />
-                  {payAmount && parseFloat(payAmount) < payModal.commission * payModal.quantity && (
-                    <p className="text-xs text-amber-600 mt-1 font-semibold">⚠ Partial payment — remaining: {fmt((payModal.commission * payModal.quantity) - parseFloat(payAmount))}</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setPayModal(null)} className="btn-secondary flex-1">Cancel</button>
-                <button onClick={() => handlePayWorker(payModal)} disabled={saving || !payAmount}
-                  className="btn-primary flex-1">{saving ? 'Processing...' : 'Confirm Payment'}</button>
+        <Modal open={!!payModal} onClose={()=>setPayModal(null)} title="Pay Worker">
+          <form onSubmit={handlePay} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ background:'var(--bg2)', borderRadius:8, padding:12, fontSize:13 }}>
+              <div style={{ fontWeight:700 }}>{payModal.worker_name}</div>
+              <div style={{ color:'var(--text3)', marginTop:2 }}>{payModal.product_name} × {payModal.quantity}</div>
+              <div style={{ display:'flex', gap:16, marginTop:8, flexWrap:'wrap' }}>
+                <span>Total: <strong>{fmt(payModal.total_commission)}</strong></span>
+                <span style={{ color:'var(--green)' }}>Paid: <strong>{fmt(payModal.paid||0)}</strong></span>
+                <span style={{ color:'var(--red)' }}>Pending: <strong>{fmt(payModal.remaining)}</strong></span>
               </div>
             </div>
-          </div>
-        </div>
+            <div>
+              <label className="label">Amount to Pay (₹) *</label>
+              <input className="input" type="number" step="0.01" value={payAmt} onChange={e=>setPayAmt(e.target.value)} required min={0.01} placeholder="Enter amount" />
+              {parseFloat(payAmt)>0 && parseFloat(payAmt)<parseFloat(payModal.remaining) && (
+                <div style={{ fontSize:11, color:'var(--yellow)', marginTop:4, fontWeight:600 }}>
+                  ⚠ Partial — {fmt(payModal.remaining-parseFloat(payAmt))} will remain pending
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button type="button" onClick={()=>setPayModal(null)} className="btn btn-secondary" style={{ flex:1 }}>Cancel</button>
+              <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex:1 }}>{saving?'Processing…':'Confirm Pay'}</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      {/* Advance Payment Modal */}
-      {advModal && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAdvModal(null)}>
-          <div className="modal-box sm:max-w-sm">
-            <div className="p-6">
-              <h3 className="section-title mb-1">Advance Payment</h3>
-              <p className="text-sm text-surface-400 mb-5">For: <strong>{advModal.name}</strong></p>
-              <div>
-                <label className="label">Advance Amount (₹)</label>
-                <input className="input text-lg font-bold" type="number" value={advAmount} onChange={e => setAdvAmount(e.target.value)} min={0} autoFocus />
-              </div>
-              <div className="flex gap-3 mt-5">
-                <button onClick={() => setAdvModal(null)} className="btn-secondary flex-1">Cancel</button>
-                <button onClick={handleAdvance} disabled={saving || !advAmount}
-                  className="btn-purple flex-1">{saving ? 'Processing...' : 'Record Advance'}</button>
-              </div>
-            </div>
+      {/* Add Advance Modal */}
+      <Modal open={advModal} onClose={()=>setAdvModal(false)} title="Record Advance">
+        <form onSubmit={handleAdvance} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <label className="label">Worker *</label>
+            <select className="input" value={advForm.worker_id} onChange={e=>setAdvForm(p=>({...p,worker_id:e.target.value}))} required>
+              <option value="">— Select Worker —</option>
+              {workers.map(w=><option key={w.id} value={w.id}>{w.name}{w.skill?` (${w.skill})`:''}</option>)}
+            </select>
+            {workers.length===0 && <div style={{ fontSize:11, color:'var(--red)', marginTop:4 }}>⚠ No workers loaded. Please refresh the page.</div>}
           </div>
-        </div>
-      )}
+          <div>
+            <label className="label">Amount (₹) *</label>
+            <input className="input" type="number" value={advForm.amount} onChange={e=>setAdvForm(p=>({...p,amount:e.target.value}))} required min={1} placeholder="0" />
+          </div>
+          <div>
+            <label className="label">Date *</label>
+            <input className="input" type="date" value={advForm.payment_date} onChange={e=>setAdvForm(p=>({...p,payment_date:e.target.value}))} required />
+          </div>
+          <div>
+            <label className="label">Note</label>
+            <input className="input" value={advForm.note} onChange={e=>setAdvForm(p=>({...p,note:e.target.value}))} placeholder="Reason for advance..." />
+          </div>
+          <div style={{ display:'flex', gap:10 }}>
+            <button type="button" onClick={()=>setAdvModal(false)} className="btn btn-secondary" style={{ flex:1 }}>Cancel</button>
+            <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex:1 }}>{saving?'Saving…':'Record Advance'}</button>
+          </div>
+        </form>
+      </Modal>
 
-      {/* Add Expense Modal */}
-      {expModal && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setExpModal(false)}>
-          <div className="modal-box sm:max-w-md">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
-              <h3 className="section-title">Add Expense</h3>
-              <button onClick={() => setExpModal(false)} className="w-8 h-8 rounded-lg hover:bg-surface-100 flex items-center justify-center"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+      {/* Edit Advance */}
+      {editAdv && (
+        <Modal open={!!editAdv} onClose={()=>setEditAdv(null)} title={`Edit Advance — ${editAdv.worker_name}`}>
+          <form onSubmit={handleEditAdv} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ background:'var(--bg2)', borderRadius:8, padding:12, fontSize:13 }}>Total advance: <strong>{fmt(editAdv.amount)}</strong></div>
+            <div>
+              <label className="label">Remaining Amount (₹)</label>
+              <p style={{ fontSize:11, color:'var(--text3)', marginBottom:4 }}>Reduce if worker paid back some amount</p>
+              <input className="input" type="number" value={editAdv.remaining} step="0.01" onChange={e=>setEditAdv(p=>({...p,remaining:e.target.value}))} required min={0} max={editAdv.amount} />
             </div>
-            <form onSubmit={handleAddExpense} className="p-5 space-y-4">
-              <div><label className="label">Title *</label><input className="input" value={expForm.title} onChange={e => setExpForm(p=>({...p,title:e.target.value}))} required placeholder="e.g. Electricity bill" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="label">Category</label><select className="input" value={expForm.category} onChange={e => setExpForm(p=>({...p,category:e.target.value}))}>{['MATERIAL','SALARY','UTILITIES','TRANSPORT','OTHER'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                <div><label className="label">Amount (₹) *</label><input className="input" type="number" value={expForm.amount} onChange={e => setExpForm(p=>({...p,amount:e.target.value}))} required min={0} /></div>
-                <div><label className="label">Date *</label><input className="input" type="date" value={expForm.date} onChange={e => setExpForm(p=>({...p,date:e.target.value}))} required /></div>
-              </div>
-              <div><label className="label">Notes</label><textarea className="input resize-none" rows={2} value={expForm.notes} onChange={e => setExpForm(p=>({...p,notes:e.target.value}))} /></div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setExpModal(false)} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Saving...' : 'Add Expense'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div>
+              <label className="label">Note</label>
+              <input className="input" value={editAdv.note||''} onChange={e=>setEditAdv(p=>({...p,note:e.target.value}))} placeholder="Note" />
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button type="button" onClick={()=>setEditAdv(null)} className="btn btn-secondary" style={{ flex:1 }}>Cancel</button>
+              <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex:1 }}>{saving?'Saving…':'Update'}</button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )

@@ -3,8 +3,6 @@ import { ToastProvider } from './ui'
 import { useState } from 'react'
 import Navbar from './Navbar'
 
-const Icon = ({ d }) => <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={d}/></svg>
-
 const NAV = [
   { to:'/manager',            end:true, label:'Dashboard',   icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { to:'/manager/assign-work',label:'Assign Work',  icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
@@ -20,15 +18,16 @@ const NAV = [
 
 function Sidebar({ onClose }) {
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-surface-200 dark:border-gray-800 w-52">
-      <div className="px-3 py-3 border-b border-surface-100 dark:border-gray-800">
-        <span className="text-xs font-bold text-surface-400 dark:text-gray-500 uppercase tracking-widest">Manager</span>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--card)', borderRight:'1px solid var(--border)', width:200 }}>
+      <div style={{ padding:'10px 12px', borderBottom:'1px solid var(--border)' }}>
+        <span style={{ fontSize:10, fontWeight:800, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Manager Panel</span>
       </div>
-      <nav className="flex-1 px-2 py-2 overflow-y-auto space-y-0.5">
+      <nav style={{ flex:1, padding:8, overflowY:'auto', display:'flex', flexDirection:'column', gap:2 }}>
         {NAV.map(n => (
           <NavLink key={n.to} to={n.to} end={n.end} onClick={onClose}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Icon d={n.icon} />{n.label}
+            className={({isActive}) => `nav-item${isActive?' active':''}`}>
+            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={n.icon}/></svg>
+            {n.label}
           </NavLink>
         ))}
       </nav>
@@ -40,21 +39,22 @@ export default function ManagerLayout() {
   const [open, setOpen] = useState(false)
   return (
     <ToastProvider>
-      <div className="flex flex-col h-screen overflow-hidden bg-surface-50 dark:bg-gray-950">
+      <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden', background:'var(--bg)' }}>
         <Navbar onMenuClick={() => setOpen(true)} />
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          <aside className="hidden lg:flex flex-col flex-shrink-0 overflow-y-auto">
+        <div style={{ display:'flex', flex:1, minHeight:0, overflow:'hidden' }}>
+          <aside style={{ flexShrink:0, overflowY:'auto' }} className="sidebar-desktop2">
+            <style>{`.sidebar-desktop2{display:none}@media(min-width:1024px){.sidebar-desktop2{display:flex!important}}`}</style>
             <Sidebar onClose={() => {}} />
           </aside>
           {open && (
-            <div className="lg:hidden fixed inset-0 z-50 flex">
-              <div className="fixed inset-0 bg-black/40" onClick={() => setOpen(false)} />
-              <aside className="relative z-10 overflow-y-auto">
+            <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex' }}>
+              <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)' }} onClick={()=>setOpen(false)} />
+              <aside style={{ position:'relative', zIndex:1, overflowY:'auto' }}>
                 <Sidebar onClose={() => setOpen(false)} />
               </aside>
             </div>
           )}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-5">
+          <main style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
             <Outlet />
           </main>
         </div>

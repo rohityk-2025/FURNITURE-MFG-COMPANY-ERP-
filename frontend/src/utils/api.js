@@ -1,14 +1,21 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
-  headers: { 'Content-Type': 'application/json' }
+  baseURL: '/api'
 })
 
 // Attach JWT token to every request automatically
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('erp_token')
   if (token) config.headers['Authorization'] = `Bearer ${token}`
+
+  // Let the browser set the multipart boundary for FormData uploads.
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  } else {
+    config.headers['Content-Type'] = 'application/json'
+  }
+
   return config
 })
 
