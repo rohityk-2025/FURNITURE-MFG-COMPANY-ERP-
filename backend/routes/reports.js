@@ -75,68 +75,121 @@ router.get('/profit', auth, async (req, res) => {
     const to   = req.query.to || defaultTo()
     const months = getMonthKeys(from, to)
 
-    const [sales] = await sequelize.query(
-      `SELECT DATE_FORMAT(o.order_date,'%Y-%m') as month,
-              SUM((COALESCE(o.subtotal,0) - COALESCE(o.discount,0)) + COALESCE(o.delivery_charges,0) + COALESCE(o.other_charges,0)) as sales
+    const [orders] = await sequelize.query(
+      `SELECT o.id,
+              o.order_number,
+              o.order_date,
+              c.name as customer_name,
+              COALESCE(
+                o.total_amount,
+                (COALESCE(o.subtotal,0) - COALESCE(o.discount,0)) + COALESCE(o.delivery_charges,0) + COALESCE(o.other_charges,0)
+              ) as amount,
+              COALESCE(SUM(COALESCE(p.material_cost,0) * COALESCE(oi.quantity,0)),0) as material_cost,
+              COALESCE(SUM(COALESCE(p.commission,0) * COALESCE(oi.quantity,0)),0) as commission
        FROM orders o
-       WHERE o.status!='CANCELLED' AND o.order_date BETWEEN ? AND ?
-       GROUP BY DATE_FORMAT(o.order_date,'%Y-%m')`,
-      { replacements:[from, to] }
-    )
-
-    const [materialCosts] = await sequelize.query(
-      `SELECT DATE_FORMAT(o.order_date,'%Y-%m') as month,
-              SUM(COALESCE(p.material_cost,0) * COALESCE(oi.quantity,0)) as material_cost
-       FROM orders o
-       JOIN order_items oi ON oi.order_id=o.id
+       LEFT JOIN customers c ON c.id=o.customer_id
+       LEFT JOIN order_items oi ON oi.order_id=o.id
        LEFT JOIN products p ON p.id=oi.product_id
-       WHERE o.status!='CANCELLED' AND o.order_date BETWEEN ? AND ?
-       GROUP BY DATE_FORMAT(o.order_date,'%Y-%m')`,
+       WHERE o.status!='CANCELLED' AND DATE(o.order_date) BETWEEN ? AND ?
+       GROUP BY o.id, o.order_number, o.order_date, c.name, o.total_amount, o.subtotal, o.discount, o.delivery_charges, o.other_charges
+       ORDER BY o.order_date DESC, o.id DESC`,
       { replacements:[from, to] }
     )
 
-    const [expenses] = await sequelize.query(
-      `SELECT DATE_FORMAT(date,'%Y-%m') as month,
-              SUM(amount) as expenses
+    const [expenseRows] = await sequelize.query(
+      `SELECT date, COALESCE(category,'OTHER') as category, amount
        FROM expenses
-       WHERE date BETWEEN ? AND ?
+       WHERE DATE(date) BETWEEN ? AND ?
          AND COALESCE(is_active,1)=1
-         AND COALESCE(category,'OTHER')!='MATERIAL'
-       GROUP BY DATE_FORMAT(date,'%Y-%m')`,
+         AND UPPER(COALESCE(category,'OTHER'))!='MATERIAL'
+       ORDER BY date DESC, id DESC`,
       { replacements:[from, to] }
     )
 
-    const sMap = Object.fromEntries(sales.map(r => [r.month, parseFloat(r.sales || 0)]))
-    const mMap = Object.fromEntries(materialCosts.map(r => [r.month, parseFloat(r.material_cost || 0)]))
-    const eMap = Object.fromEntries(expenses.map(r => [r.month, parseFloat(r.expenses || 0)]))
-
-    const monthly = months.map(month => {
-      const revenue = sMap[month] || 0
-      const materialCost = mMap[month] || 0
-      const operatingExpenses = eMap[month] || 0
-      const grossProfit = revenue - materialCost
-      const netProfit = grossProfit - operatingExpenses
+    const orderDetails = orders.map((row, index) => {
+      const amount = parseFloat(row.amount || 0)
+      const materialCost = parseFloat(row.material_cost || 0)
+      const commission = parseFloat(row.commission || 0)
+      const grossProfit = amount - materialCost - commission
+      const profitPercent = amount > 0 ? (grossProfit / amount) * 100 : 0
 
       return {
-        month,
-        label: monthLabel(month),
-        sales: revenue,
+        srNo: index + 1,
+        id: row.id,
+        orderId: row.order_number || `ORDER-${row.id}`,
+        customerName: row.customer_name || 'Walk-in Customer',
+        date: row.order_date,
+        amount,
         materialCost,
+        commission,
         grossProfit,
-        expenses: operatingExpenses,
-        netProfit,
+        profitPercent,
       }
     })
 
+    const monthlyMap = Object.fromEntries(
+      months.map((month) => [month, {
+        month,
+        label: monthLabel(month),
+        orders: 0,
+        sales: 0,
+        materialCost: 0,
+        commission: 0,
+        grossProfit: 0,
+        expenses: 0,
+        netProfit: 0,
+      }])
+    )
+
+    orderDetails.forEach((row) => {
+      const month = monthKey(row.date)
+      if (!monthlyMap[month]) return
+      monthlyMap[month].orders += 1
+      monthlyMap[month].sales += row.amount
+      monthlyMap[month].materialCost += row.materialCost
+      monthlyMap[month].commission += row.commission
+      monthlyMap[month].grossProfit += row.grossProfit
+    })
+
+    const expenseCategoryMap = {}
+    expenseRows.forEach((row) => {
+      const amount = parseFloat(row.amount || 0)
+      const month = monthKey(row.date)
+      const category = row.category || 'OTHER'
+
+      if (monthlyMap[month]) monthlyMap[month].expenses += amount
+      expenseCategoryMap[category] = (expenseCategoryMap[category] || 0) + amount
+    })
+
+    const monthly = months.map((month) => {
+      const row = monthlyMap[month]
+      row.netProfit = row.grossProfit - row.expenses
+      return row
+    })
+
     const summary = monthly.reduce((acc, row) => ({
+      totalOrders: acc.totalOrders + row.orders,
       sales: acc.sales + row.sales,
       materialCost: acc.materialCost + row.materialCost,
+      commission: acc.commission + row.commission,
       grossProfit: acc.grossProfit + row.grossProfit,
       expenses: acc.expenses + row.expenses,
       netProfit: acc.netProfit + row.netProfit,
-    }), { sales:0, materialCost:0, grossProfit:0, expenses:0, netProfit:0 })
+    }), { totalOrders:0, sales:0, materialCost:0, commission:0, grossProfit:0, expenses:0, netProfit:0 })
 
-    res.json({ from, to, monthly, summary })
+    const expenseBreakdown = Object.entries(expenseCategoryMap)
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount)
+
+    res.json({
+      from,
+      to,
+      monthly,
+      summary,
+      orderDetails,
+      expenseBreakdown,
+      operatingExpenseSource: 'Operating expenses are taken from the expenses table for the selected date range, only active entries are included, and category MATERIAL is excluded.',
+    })
   } catch(err) { res.status(500).json({ error:err.message }) }
 })
 

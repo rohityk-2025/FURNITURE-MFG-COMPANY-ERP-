@@ -14,6 +14,8 @@ const IC = ({ d, cls = 'w-4 h-4' }) => (
   </svg>
 )
 
+const getWorkerImage = (worker) => worker?.image_url || worker?.profile_image || null
+
 export default function AdminWorkers() {
   const toast = useToast()
   const [workers, setWorkers] = useState([])
@@ -60,7 +62,7 @@ export default function AdminWorkers() {
       salary_type: w.salary_type || 'DAILY',
       monthly_salary: w.monthly_salary || ''
     })
-    setProfilePreview(w.profile_image ? `/uploads/${w.profile_image}` : null)
+    setProfilePreview(getWorkerImage(w))
     setProfileFile(null); setModal(true)
   }
 
@@ -73,7 +75,7 @@ export default function AdminWorkers() {
         : parseFloat(form.daily_rate) || 0
       const payload = { ...form, daily_rate: rate, is_active: true }
       Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ''))
-      if (profileFile) fd.append('profile_image', profileFile)
+      if (profileFile) fd.append('image', profileFile)
       const cfg = { headers: { 'Content-Type': 'multipart/form-data' } }
       if (editing) { await api.put(`/workers/${editing}`, fd, cfg); toast('Worker updated') }
       else { await api.post('/workers', fd, cfg); toast('Worker added') }
@@ -207,8 +209,8 @@ export default function AdminWorkers() {
                       <td className="table-td">
                         <button onClick={() => openDetail(w)} className="flex items-center gap-2.5 text-left group">
                           <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-primary-100 dark:bg-primary-900/30">
-                            {w.profile_image
-                              ? <img src={`/uploads/${w.profile_image}`} className="w-full h-full object-cover" alt="" />
+                            {getWorkerImage(w)
+                              ? <img src={getWorkerImage(w)} className="w-full h-full object-cover" alt="" />
                               : <div className="w-full h-full flex items-center justify-center text-primary-600 text-xs font-bold">{w.name.charAt(0)}</div>
                             }
                           </div>
@@ -254,8 +256,8 @@ export default function AdminWorkers() {
                 <div key={w.id} className="card p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-100 flex-shrink-0">
-                      {w.profile_image
-                        ? <img src={`/uploads/${w.profile_image}`} className="w-full h-full object-cover" alt="" />
+                      {getWorkerImage(w)
+                        ? <img src={getWorkerImage(w)} className="w-full h-full object-cover" alt="" />
                         : <div className="w-full h-full flex items-center justify-center text-primary-600 font-bold">{w.name.charAt(0)}</div>
                       }
                     </div>
@@ -343,8 +345,8 @@ export default function AdminWorkers() {
           <div className="space-y-4">
             <div className="flex items-center gap-4 p-4 bg-surface-50 dark:bg-gray-800 rounded-xl">
               <div className="w-14 h-14 rounded-xl overflow-hidden bg-primary-100 flex-shrink-0">
-                {detailWorker?.profile_image
-                  ? <img src={`/uploads/${detailWorker.profile_image}`} className="w-full h-full object-cover" alt="" />
+                {getWorkerImage(detailWorker)
+                  ? <img src={getWorkerImage(detailWorker)} className="w-full h-full object-cover" alt="" />
                   : <div className="w-full h-full flex items-center justify-center text-primary-600 text-xl font-bold">{detailWorker?.name?.charAt(0)}</div>
                 }
               </div>

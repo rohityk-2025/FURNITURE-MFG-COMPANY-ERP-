@@ -13,13 +13,38 @@ const storage = multer.diskStorage({
   destination: (req,file,cb) => cb(null, uploadDir),
   filename:    (req,file,cb) => cb(null, `w_${Date.now()}${path.extname(file.originalname)}`)
 })
-const upload = multer({ storage, limits:{ fileSize:3*1024*1024 }, fileFilter:(req,file,cb)=>{
+const upload = multer({ storage, limits:{ fileSize:10*1024*1024 }, fileFilter:(req,file,cb)=>{
   if (file.mimetype.startsWith('image/')) cb(null,true)
   else cb(new Error('Images only'))
 }})
 
+const runImageUpload = (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (!err) return next()
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error:'Image must be 10MB or smaller' })
+    }
+    return res.status(400).json({ error: err.message || 'Upload failed' })
+  })
+}
+
+const toNumber = (value, fallback = 0) => {
+  const num = parseFloat(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+const toTinyInt = (value, fallback = 1) => {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'boolean') return value ? 1 : 0
+  if (typeof value === 'number' && Number.isFinite(value)) return value ? 1 : 0
+  const normalized = String(value).trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return 1
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return 0
+  return fallback
+}
+
 // Standalone image upload
-router.post('/upload-image', auth, upload.single('image'), (req, res) => {
+router.post('/upload-image', auth, runImageUpload, (req, res) => {
   if (!req.file) return res.status(400).json({ error:'No file' })
   res.json({ url:`/uploads/workers/${req.file.filename}` })
 })
@@ -71,7 +96,7 @@ router.get('/:id', auth, async (req, res) => {
 })
 
 // POST - accepts FormData with optional image file
-router.post('/', auth, adminOnly, upload.single('image'), async (req, res) => {
+router.post('/', auth, adminOnly, runImageUpload, async (req, res) => {
   try {
     const body = req.body
     const name = (body.name||'').trim()
@@ -83,7 +108,7 @@ router.post('/', auth, adminOnly, upload.single('image'), async (req, res) => {
 
     const cols   = await getWorkerCols()
     const fields = ['name','phone','address','skill','daily_rate','joined_date']
-    const vals   = [name, body.phone||null, body.address||null, body.skill||null, parseFloat(body.daily_rate)||0, body.joined_date||null]
+    const vals   = [name, body.phone||null, body.address||null, body.skill||null, toNumber(body.daily_rate), body.joined_date||null]
 
     if (cols.includes('worker_type')) { fields.push('worker_type'); vals.push(body.worker_type||'PERMANENT') }
     if (cols.includes('salary_type')) { fields.push('salary_type'); vals.push(body.salary_type||'DAILY') }
@@ -101,7 +126,7 @@ router.post('/', auth, adminOnly, upload.single('image'), async (req, res) => {
 })
 
 // PUT - accepts FormData with optional image file
-router.put('/:id', auth, adminOnly, upload.single('image'), async (req, res) => {
+router.put('/:id', auth, adminOnly, runImageUpload, async (req, res) => {
   try {
     const body = req.body
     const name = (body.name||'').trim()
@@ -112,11 +137,14 @@ router.put('/:id', auth, adminOnly, upload.single('image'), async (req, res) => 
 
     const cols    = await getWorkerCols()
     const updates = ['name=?','phone=?','address=?','skill=?','daily_rate=?','is_active=?']
-    const vals    = [name, body.phone||null, body.address||null, body.skill||null, parseFloat(body.daily_rate)||0, body.is_active!==undefined ? parseInt(body.is_active) : 1]
+    const vals    = [name, body.phone||null, body.address||null, body.skill||null, toNumber(body.daily_rate), toTinyInt(body.is_active, 1)]
 
     if (cols.includes('worker_type')) { updates.push('worker_type=?'); vals.push(body.worker_type||'PERMANENT') }
     if (cols.includes('salary_type')) { updates.push('salary_type=?'); vals.push(body.salary_type||'DAILY') }
-    if (cols.includes('image_url'))   { updates.push('image_url=?');   vals.push(imageUrl) }
+    if (cols.includes('image_url') && (req.file || body.image_url !== undefined)) {
+      updates.push('image_url=?')
+      vals.push(imageUrl)
+    }
 
     vals.push(req.params.id)
     await sequelize.query(`UPDATE workers SET ${updates.join(',')} WHERE id=?`, { replacements:vals })

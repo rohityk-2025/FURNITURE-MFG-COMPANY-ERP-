@@ -60,17 +60,54 @@ export default function AdminOrders() {
   }
 
   const exportExcel = () => {
-    const rows = [['S.No.', 'Order #', 'Customer', 'Phone', 'Order Date', 'Delivery Date', 'Status', 'Payment', 'Total', 'Paid', 'Balance']]
+    const totalRevenue = filtered.reduce((s,o) => s + parseFloat(o.total_amount||0), 0)
+    const totalCollected = filtered.reduce((s,o) => s + parseFloat(o.amount_paid||0), 0)
+    const totalDue = totalRevenue - totalCollected
+    const rows = [
+      ['S.No.','Order #','Customer Name','Phone','Email','Customer Address','GST Number',
+       'Order Date','Delivery Date','Status','Payment Status','Payment Mode',
+       'Subtotal','CGST','SGST','IGST','Delivery Charges','Other Charges','Discount',
+       'Grand Total','Amount Paid','Balance Due','Transport','Vehicle No.','LR No.','Notes'],
+    ]
     filtered.forEach((o, index) => rows.push([
-      index + 1, o.order_number, o.customer_name, o.customer_phone || '',
-      o.order_date?.split('T')[0] || '', o.delivery_date?.split('T')[0] || '',
-      o.status, o.payment_status, o.total_amount, o.amount_paid,
-      o.total_amount - o.amount_paid
+      index + 1,
+      o.order_number,
+      o.customer_name || '',
+      o.customer_phone || '',
+      o.customer_email || '',
+      o.customer_address || '',
+      o.gst_number || o.customer_gst || '',
+      o.order_date?.split('T')[0] || '',
+      o.delivery_date?.split('T')[0] || '',
+      o.status,
+      o.payment_status,
+      o.payment_mode || 'CASH',
+      parseFloat(o.subtotal||0).toFixed(2),
+      parseFloat(o.cgst||0).toFixed(2),
+      parseFloat(o.sgst||0).toFixed(2),
+      parseFloat(o.igst||0).toFixed(2),
+      parseFloat(o.delivery_charges||0).toFixed(2),
+      parseFloat(o.other_charges||0).toFixed(2),
+      parseFloat(o.discount||0).toFixed(2),
+      parseFloat(o.total_amount||0).toFixed(2),
+      parseFloat(o.amount_paid||0).toFixed(2),
+      (parseFloat(o.total_amount||0) - parseFloat(o.amount_paid||0)).toFixed(2),
+      o.transport_name || '',
+      o.vehicle_number || '',
+      o.lr_number || '',
+      o.notes || '',
     ]))
-    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    // Summary rows
+    rows.push([])
+    rows.push(['SUMMARY','','','','','','','','','','','','','','','','','','',
+      'TOTAL REVENUE','COLLECTED','BALANCE DUE'])
+    rows.push(['','','','','','','','','','','','','','','','','','','',
+      totalRevenue.toFixed(2), totalCollected.toFixed(2), totalDue.toFixed(2)])
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = `orders-${Date.now()}.csv`; a.click()
+    const a = document.createElement('a'); a.href = url; a.download = `orders-detailed-${new Date().toISOString().split('T')[0]}.csv`; a.click()
     URL.revokeObjectURL(url)
   }
 

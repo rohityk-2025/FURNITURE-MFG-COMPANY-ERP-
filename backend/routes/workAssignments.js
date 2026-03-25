@@ -3,6 +3,30 @@ const { sequelize } = require('../config/database')
 const { auth } = require('../middleware/auth')
 const router = express.Router()
 
+const toNumber = (value) => {
+  const num = parseFloat(value)
+  return Number.isFinite(num) ? num : 0
+}
+
+async function getExpenseCategory(preferred = 'OTHER') {
+  try {
+    const [rows] = await sequelize.query(`
+      SELECT COLUMN_TYPE
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'expenses'
+        AND COLUMN_NAME = 'category'
+      LIMIT 1
+    `)
+    const columnType = rows[0]?.COLUMN_TYPE || ''
+    const matches = [...columnType.matchAll(/'([^']+)'/g)].map((match) => match[1])
+    if (!matches.length) return preferred
+    return matches.includes(preferred) ? preferred : (matches.includes('OTHER') ? 'OTHER' : matches[0])
+  } catch {
+    return preferred
+  }
+}
+
 router.get('/', auth, async (req, res) => {
   try {
     const { worker_id, status } = req.query
@@ -51,32 +75,55 @@ router.post('/:id/pay', auth, async (req, res) => {
     const [rows] = await sequelize.query('SELECT * FROM work_assignments WHERE id=?', { replacements: [req.params.id] })
     if (!rows.length) return res.status(404).json({ error: 'Not found' })
     const job  = rows[0]
-    const paid = parseFloat(amount) || (job.commission * job.quantity)
-    const today = new Date().toISOString().split('T')[0]
-
-    await sequelize.query(
-      'UPDATE work_assignments SET is_paid=1, paid_date=? WHERE id=?',
-      { replacements: [today, req.params.id] }
+    const total = toNumber(job.commission) * toNumber(job.quantity)
+    const [[payments]] = await sequelize.query(
+      'SELECT COALESCE(SUM(amount),0) as paid FROM worker_payments WHERE work_assignment_id=?',
+      { replacements:[req.params.id] }
     )
+    const alreadyPaid = Math.min(toNumber(payments?.paid), total)
+    const due = Math.max(0, total - alreadyPaid)
+    const requested = toNumber(amount) || due
+
+    if (requested <= 0) return res.status(400).json({ error:'Enter a valid payment amount' })
+    if (due <= 0) return res.status(400).json({ error:'This assignment is already fully paid' })
+
+    const paid = Math.min(requested, due)
+    const totalPaid = alreadyPaid + paid
+    const remaining = Math.max(0, total - totalPaid)
+    const today = new Date().toISOString().split('T')[0]
+    const payType = payment_type || (remaining > 0 ? 'PARTIAL' : 'FULL')
+    const expenseCategory = await getExpenseCategory('SALARY')
+
+    try {
+      await sequelize.query(
+        'UPDATE work_assignments SET is_paid=?, paid_amount=?, paid_date=? WHERE id=?',
+        { replacements: [remaining <= 0 ? 1 : 0, totalPaid, today, req.params.id] }
+      )
+    } catch {
+      await sequelize.query(
+        'UPDATE work_assignments SET is_paid=?, paid_date=? WHERE id=?',
+        { replacements: [remaining <= 0 ? 1 : 0, today, req.params.id] }
+      )
+    }
     await sequelize.query(
       'INSERT INTO worker_payments(worker_id,work_assignment_id,amount,payment_date,payment_type,notes,created_by)VALUES(?,?,?,?,?,?,?)',
-      { replacements: [job.worker_id, job.id, paid, today, payment_type||'FULL', notes||null, req.user.id] }
+      { replacements: [job.worker_id, job.id, paid, today, payType, notes||null, req.user.id] }
     )
 
     // Try inserting expense with description, fall back without it
     try {
       await sequelize.query(
         "INSERT INTO expenses(title,category,amount,date,description,created_by)VALUES(?,?,?,?,?,?)",
-        { replacements: [`Worker Payment #${req.params.id}`, 'SALARY', paid, today, notes||null, req.user.id] }
+        { replacements: [`Worker Payment #${req.params.id}`, expenseCategory, paid, today, notes||null, req.user.id] }
       )
     } catch {
       await sequelize.query(
         "INSERT INTO expenses(title,category,amount,date,created_by)VALUES(?,?,?,?,?)",
-        { replacements: [`Worker Payment #${req.params.id}`, 'SALARY', paid, today, req.user.id] }
+        { replacements: [`Worker Payment #${req.params.id}`, expenseCategory, paid, today, req.user.id] }
       )
     }
 
-    res.json({ success: true })
+    res.json({ success: true, paid, remaining, status: payType })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

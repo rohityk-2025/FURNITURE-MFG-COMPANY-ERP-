@@ -197,11 +197,7 @@ export default function ManagerOrders() {
         <div><label style={labelStyle}>Order Date *</label><input style={inputStyle} type="date" value={value.order_date} onChange={setField(setter, 'order_date')} required /></div>
         <div><label style={labelStyle}>Delivery Date</label><input style={inputStyle} type="date" value={value.delivery_date} onChange={setField(setter, 'delivery_date')} /></div>
         <div><label style={labelStyle}>Status</label><select style={inputStyle} value={value.status} onChange={setField(setter, 'status')}>{STATUSES.map(status => <option key={status} value={status}>{status}</option>)}</select></div>
-        <div><label style={labelStyle}>Payment Mode</label><select style={inputStyle} value={value.payment_mode} onChange={setField(setter, 'payment_mode')}>{PAY_MODES.map(mode => <option key={mode} value={mode}>{mode}</option>)}</select></div>
-        {includePayment && <>
-          <div><label style={labelStyle}>Payment Status</label><select style={inputStyle} value={value.payment_status || 'UNPAID'} onChange={setField(setter, 'payment_status')}>{['UNPAID','PARTIAL','PAID'].map(status => <option key={status} value={status}>{status}</option>)}</select></div>
-          <div><label style={labelStyle}>Amount Paid</label><input style={inputStyle} type="number" min={0} value={value.amount_paid || 0} onChange={setField(setter, 'amount_paid')} /></div>
-        </>}
+
         <div><label style={labelStyle}>Transport Name</label><input style={inputStyle} value={value.transport_name} onChange={setField(setter, 'transport_name')} placeholder="Transport company" /></div>
         <div><label style={labelStyle}>Vehicle Number</label><input style={inputStyle} value={value.vehicle_number} onChange={setField(setter, 'vehicle_number')} placeholder="GJ 06 1234" /></div>
         <div><label style={labelStyle}>LR Number</label><input style={inputStyle} value={value.lr_number} onChange={setField(setter, 'lr_number')} placeholder="LR-001" /></div>
@@ -218,6 +214,37 @@ export default function ManagerOrders() {
         <div><label style={labelStyle}>Discount</label><input style={inputStyle} type="number" min={0} value={value.discount} onChange={setField(setter, 'discount')} /></div>
       </div>
       <div><label style={labelStyle}>Notes</label><textarea style={{ ...inputStyle, minHeight:80, resize:'vertical' }} value={value.notes} onChange={setField(setter, 'notes')} placeholder="Order notes..." /></div>
+    </div>
+  )
+
+  const renderPaymentSection = (value, setter, grandTotal) => (
+    <div style={{ ...sectionStyle, border:'2px solid var(--primary)', background:'var(--primary-bg)' }}>
+      <div style={{ ...sectionTitleStyle, color:'var(--primary)' }}>Payment Details</div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+        <div>
+          <label style={labelStyle}>Payment Mode</label>
+          <select style={inputStyle} value={value.payment_mode} onChange={setField(setter, 'payment_mode')}>
+            {PAY_MODES.map(mode => <option key={mode} value={mode}>{mode}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Payment Status</label>
+          <select style={inputStyle} value={value.payment_status || 'UNPAID'} onChange={setField(setter, 'payment_status')}>
+            {['UNPAID','PARTIAL','PAID'].map(status => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Amount Paid (₹)</label>
+          <input style={{ ...inputStyle, fontWeight:800, color:'var(--primary)', fontSize:15 }}
+            type="number" min={0} max={grandTotal} value={value.amount_paid || 0}
+            onChange={setField(setter, 'amount_paid')} placeholder="0" />
+          {num(value.amount_paid) > 0 && grandTotal > 0 && (
+            <div style={{ fontSize:11, color: num(value.amount_paid) >= grandTotal ? 'var(--green)' : 'var(--red)', marginTop:3, fontWeight:700 }}>
+              {num(value.amount_paid) >= grandTotal ? '✓ Fully Paid' : `Balance: ${fmt(round2(grandTotal - num(value.amount_paid)))}`}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 
@@ -370,6 +397,7 @@ export default function ManagerOrders() {
           {renderOrderSection(form, setForm)}
           <ItemsForm value={form} setter={setForm} isEdit={false} />
           {renderChargeSection(form, setForm)}
+          {renderPaymentSection(form, setForm, calcTotals(form).total)}
           <div style={{ display:'flex', gap:10 }}>
             <button type="button" onClick={() => setModal(false)} style={{ flex:1, padding:'11px', background:'var(--bg2)', color:'var(--text2)', border:'1px solid var(--border)', borderRadius:10, fontWeight:700, fontSize:13, cursor:'pointer' }}>Cancel</button>
             <button type="submit" disabled={saving} style={{ flex:2, padding:'11px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:10, fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving ? 0.7 : 1 }}>{saving ? 'Creating...' : 'Create Order'}</button>
@@ -380,9 +408,10 @@ export default function ManagerOrders() {
       {editForm && <Modal open={editModal} onClose={() => setEditModal(false)} title={`Edit Order - ${editForm.order_number}`} size="2xl">
         <form onSubmit={handleUpdate} style={{ display:'flex', flexDirection:'column', gap:16 }}>
           {renderCustomerSection(editForm, setEditForm)}
-          {renderOrderSection(editForm, setEditForm, true)}
+          {renderOrderSection(editForm, setEditForm, false)}
           <ItemsForm value={editForm} setter={setEditForm} isEdit />
           {renderChargeSection(editForm, setEditForm)}
+          {renderPaymentSection(editForm, setEditForm, calcTotals(editForm).total)}
           <div style={{ display:'flex', gap:10 }}>
             <button type="button" onClick={() => setEditModal(false)} style={{ flex:1, padding:'11px', background:'var(--bg2)', color:'var(--text2)', border:'1px solid var(--border)', borderRadius:10, fontWeight:700, fontSize:13, cursor:'pointer' }}>Cancel</button>
             <button type="submit" disabled={saving} style={{ flex:2, padding:'11px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:10, fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Update Order'}</button>

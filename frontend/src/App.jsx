@@ -20,6 +20,7 @@ import AdminAttendance from './pages/admin/Attendance'
 import AdminCalendar   from './pages/admin/CalendarPage'
 import AdminExpenses   from './pages/admin/Expenses'
 import AdminCustomers  from './pages/admin/Customers'
+import AdminGST       from './pages/admin/GST'
 
 // Manager pages
 import ManagerDashboard  from './pages/manager/Dashboard'
@@ -61,6 +62,7 @@ function AppRoutes() {
         <Route path="calendar"    element={<AdminCalendar />} />
         <Route path="expenses"    element={<AdminExpenses />} />
         <Route path="customers"   element={<AdminCustomers />} />
+        <Route path="gst"          element={<AdminGST />} />
       </Route>
 
       <Route path="/manager" element={<Guard><ManagerLayout /></Guard>}>
