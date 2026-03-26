@@ -3,7 +3,7 @@ import api from '../../utils/api'
 import { Modal, SearchBar, LoadingPage, EmptyState, fmt } from '../../components/ui'
 import { useToast } from '../../components/ui'
 
-const emptyMaterial = { name: '', unit: 'pcs', min_stock: '', unit_price: '', vendor_name: '', vendor_phone: '', notes: '' }
+const emptyMaterial = { name: '', unit: 'pcs', min_stock: '', unit_price: '', vendor_name: '', vendor_phone: '', vendor_gst: '', gst_pct: '', notes: '' }
 const emptyTxn = { type: 'IN', quantity: '', unit_price: '', vendor_name: '', notes: '' }
 const UNITS = ['pcs', 'sheets', 'liters', 'meters', 'kg', 'box', 'pack', 'pairs', 'rolls']
 
@@ -25,7 +25,7 @@ export default function AdminInventory() {
   useEffect(() => { load() }, [])
 
   const openAddMat = () => { setEditingMat(null); setMatForm(emptyMaterial); setMatModal(true) }
-  const openEditMat = (m) => { setEditingMat(m.id); setMatForm({ name: m.name, unit: m.unit, min_stock: m.min_stock, unit_price: m.unit_price, vendor_name: m.vendor_name || '', vendor_phone: m.vendor_phone || '', notes: m.notes || '' }); setMatModal(true) }
+  const openEditMat = (m) => { setEditingMat(m.id); setMatForm({ name: m.name, unit: m.unit, min_stock: m.min_stock, unit_price: m.unit_price, vendor_name: m.vendor_name || '', vendor_phone: m.vendor_phone || '', vendor_gst: m.vendor_gst || '', gst_pct: m.gst_pct || '', notes: m.notes || '' }); setMatModal(true) }
   const openTxn = (m) => { setTxnModal(m); setTxnForm({ ...emptyTxn, vendor_name: m.vendor_name || '', unit_price: m.unit_price }) }
 
   const openHistory = async (m) => {

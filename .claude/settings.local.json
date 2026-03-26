@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"/c/Users/rohit/OneDrive/Desktop/final furniture/FURNITURE-MFG-COMPANY-ERP-\" diff --stat HEAD)",
+      "Bash(ls \"c:\\\\Users\\\\rohit\\\\OneDrive\\\\Desktop\\\\final furniture\\\\FURNITURE-MFG-COMPANY-ERP-\\\\frontend\\\\src\\\\pages\\\\admin\"\" && ls \"c:UsersrohitOneDriveDesktopfinal furnitureFURNITURE-MFG-COMPANY-ERP-frontendsrcpages\"\")",
+      "Bash(curl -s http://localhost:5000/api/website/public)",
+      "Bash(curl -s -X POST http://localhost:5000/api/auth/login -H \"Content-Type: application/json\" -d \"{\"\"email\"\":\"\"admin@furniture.com\"\",\"\"password\"\":\"\"admin123\"\"}\")",
+      "Bash(curl -s -X POST http://localhost:5000/api/auth/login -H \"Content-Type: application/json\" -d \"{\"\"email\"\":\"\"rohit@furniture.com\"\",\"\"password\"\":\"\"admin123\"\"}\")",
+      "Bash(curl -s http://localhost:5000/api/website/products -H \"Authorization: Bearer test\")",
+      "Bash(node -e \":*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhZG1pbkBmdXJuaXR1cmVlcnAuY29tIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzc0NTA5MzczLCJleHAiOjE3NzQ1MTI5NzN9.SVnAu_J8c-DXyAaQrXb1JzCL-w1zQB_EnknJV39WYcY\")",
+      "Bash(__NEW_LINE_61220b6e2556da48__ echo:*)",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\" http://localhost:5000/api/website/info -H \"Authorization: Bearer $TOKEN\")",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\" -X PUT http://localhost:5000/api/website/info -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -d '{\"\"company_name\"\":\"\"Test Co\"\",\"\"tagline\"\":\"\"Test tagline\"\"}')",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\" http://localhost:5000/api/website/products -H \"Authorization: Bearer $TOKEN\")"
+    ]
+  }
+}

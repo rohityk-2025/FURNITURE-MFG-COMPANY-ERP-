@@ -1,279 +1,251 @@
+/**
+ * Admin Users (Managers) Page
+ * - Add, Edit, Deactivate, Reactivate users
+ * - Admin cannot deactivate own account
+ * - Supports password change on edit
+ */
 import { useState, useEffect } from 'react'
 import api from '../../utils/api'
-import {
-  Modal,
-  ConfirmDialog,
-  SearchBar,
-  LoadingPage,
-  EmptyState,
-  PageHeader,
-  Avatar,
-  FormSection,
-} from '../../components/ui'
-import { useToast } from '../../components/ui'
+import { Modal, ConfirmDialog, SearchBar, LoadingPage, EmptyState, useToast } from '../../components/ui'
+import { useAuth } from '../../context/AuthContext'
 
-const emptyForm = { name: '', email: '', password: '', phone: '', role: 'MANAGER' }
+const emptyForm = { name:'', email:'', password:'', phone:'', role:'MANAGER' }
+const ROLES = ['MANAGER','ADMIN','ACCOUNTANT']
+
+const labelStyle = { display:'block', fontSize:11, fontWeight:700, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:5 }
+const inputStyle = { width:'100%', padding:'9px 12px', background:'var(--card)', border:'1.5px solid var(--border)', borderRadius:8, color:'var(--text)', fontSize:13, outline:'none', minHeight:38 }
 
 export default function AdminManagers() {
   const toast = useToast()
-  const [users, setUsers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [modal, setModal] = useState(false)
-  const [form, setForm] = useState(emptyForm)
-  const [saving, setSaving] = useState(false)
-  const [confirmDel, setConfirmDel] = useState(null)
-  const [deleting, setDeleting] = useState(false)
+  const { user: me } = useAuth()
+  const [users,      setUsers]      = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [search,     setSearch]     = useState('')
+  const [addModal,   setAddModal]   = useState(false)
+  const [editModal,  setEditModal]  = useState(null)  // user object
+  const [form,       setForm]       = useState(emptyForm)
+  const [editForm,   setEditForm]   = useState(emptyForm)
+  const [saving,     setSaving]     = useState(false)
+  const [deactConfirm, setDeactConfirm] = useState(null)
+  const [working,    setWorking]    = useState(false)
 
   const load = () =>
-    api
-      .get('/users')
-      .then((r) => setUsers(r.data))
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    api.get('/users')
+       .then(r => setUsers(r.data))
+       .catch(console.error)
+       .finally(() => setLoading(false))
 
-  useEffect(() => {
-    load()
-  }, [])
+  useEffect(() => { load() }, [])
 
-  const handleSave = async (e) => {
-    e.preventDefault()
-    setSaving(true)
+  const handleAdd = async (e) => {
+    e.preventDefault(); setSaving(true)
     try {
       await api.post('/users', form)
-      toast('Manager added successfully')
-      setModal(false)
-      setForm(emptyForm)
-      load()
-    } catch (err) {
-      toast(err.response?.data?.error || 'Failed to add manager', 'error')
-    } finally {
-      setSaving(false)
-    }
+      toast('User created successfully')
+      setAddModal(false); setForm(emptyForm); load()
+    } catch(err) { toast(err.response?.data?.error || 'Failed to create user', 'error') }
+    finally { setSaving(false) }
   }
 
-  const handleDelete = async () => {
-    setDeleting(true)
+  const handleEdit = async (e) => {
+    e.preventDefault(); setSaving(true)
     try {
-      await api.delete(`/users/${confirmDel}`)
-      toast('Manager deactivated')
-      setConfirmDel(null)
-      load()
-    } catch {
-      toast('Failed', 'error')
-    } finally {
-      setDeleting(false)
-    }
+      await api.put(`/users/${editModal.id}`, editForm)
+      toast('User updated successfully')
+      setEditModal(null); load()
+    } catch(err) { toast(err.response?.data?.error || 'Failed to update', 'error') }
+    finally { setSaving(false) }
   }
 
-  const filtered = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()),
+  const handleDeactivate = async () => {
+    if (!deactConfirm) return
+    setWorking(true)
+    try {
+      await api.delete(`/users/${deactConfirm.id}`)
+      toast('User deactivated')
+      setDeactConfirm(null); load()
+    } catch(err) { toast(err.response?.data?.error || 'Failed', 'error') }
+    finally { setWorking(false) }
+  }
+
+  const handleActivate = async (u) => {
+    try {
+      await api.post(`/users/${u.id}/activate`)
+      toast('User reactivated'); load()
+    } catch { toast('Failed', 'error') }
+  }
+
+  const openEdit = (u) => {
+    setEditForm({ name:u.name, email:u.email, password:'', phone:u.phone||'', role:u.role })
+    setEditModal(u)
+  }
+
+  const filtered = users.filter(u =>
+    u.name.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const roleBadge = (role) => {
+    const colors = { ADMIN:'var(--primary)', MANAGER:'var(--secondary)', ACCOUNTANT:'var(--green)' }
+    const bg     = { ADMIN:'var(--primary-bg)', MANAGER:'var(--secondary-bg)', ACCOUNTANT:'var(--green-bg)' }
+    return <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:5, background:bg[role]||'var(--bg2)', color:colors[role]||'var(--text3)', textTransform:'uppercase', letterSpacing:'0.06em' }}>{role}</span>
+  }
+
+  const FormFields = ({ vals, onChange }) => (
+    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+        <div>
+          <label style={labelStyle}>Full Name *</label>
+          <input style={inputStyle} value={vals.name} onChange={e=>onChange('name',e.target.value)} required placeholder="Full name"
+            onFocus={e=>e.target.style.borderColor='var(--primary)'} onBlur={e=>e.target.style.borderColor='var(--border)'} />
+        </div>
+        <div>
+          <label style={labelStyle}>Phone</label>
+          <input style={inputStyle} value={vals.phone} onChange={e=>onChange('phone',e.target.value)} placeholder="+91 98765 43210"
+            onFocus={e=>e.target.style.borderColor='var(--primary)'} onBlur={e=>e.target.style.borderColor='var(--border)'} />
+        </div>
+        <div>
+          <label style={labelStyle}>Email *</label>
+          <input style={inputStyle} type="email" value={vals.email} onChange={e=>onChange('email',e.target.value)} required placeholder="user@company.com"
+            onFocus={e=>e.target.style.borderColor='var(--primary)'} onBlur={e=>e.target.style.borderColor='var(--border)'} />
+        </div>
+        <div>
+          <label style={labelStyle}>Role *</label>
+          <select style={inputStyle} value={vals.role} onChange={e=>onChange('role',e.target.value)}>
+            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div style={{ gridColumn:'1/-1' }}>
+          <label style={labelStyle}>Password {vals.id ? '(leave blank to keep current)' : '*'}</label>
+          <input style={inputStyle} type="password" value={vals.password} onChange={e=>onChange('password',e.target.value)}
+            placeholder={vals.id ? 'Enter new password to change' : 'Minimum 6 characters'}
+            onFocus={e=>e.target.style.borderColor='var(--primary)'} onBlur={e=>e.target.style.borderColor='var(--border)'} />
+        </div>
+      </div>
+    </div>
   )
 
   if (loading) return <LoadingPage />
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <PageHeader
-        title="Managers"
-        subtitle="User accounts with access to the ERP"
-        action={
-          <button
-            onClick={() => {
-              setForm(emptyForm)
-              setModal(true)
-            }}
-            className="btn-primary"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Add Manager
-          </button>
-        }
-      />
-
-      <div className="list-shell">
-        <div className="list-toolbar">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search users..." />
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+        <div>
+          <h1 style={{ fontSize:20, fontWeight:800, color:'var(--text)', margin:0 }}>Users & Managers</h1>
+          <p style={{ fontSize:12, color:'var(--text3)', marginTop:3 }}>Manage ERP access accounts</p>
         </div>
+        <button onClick={()=>{ setForm(emptyForm); setAddModal(true) }}
+          style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 18px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:10, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/></svg>
+          Add User
+        </button>
+      </div>
 
+      <SearchBar value={search} onChange={setSearch} placeholder="Search by name or email..." />
+
+      <div style={{ background:'var(--card)', border:'1px solid var(--border)', borderRadius:14, overflow:'hidden' }}>
         {filtered.length === 0 ? (
-          <EmptyState
-            icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
-            }
-            title="No users found"
-            desc="Add managers to give them access."
-            action={
-              <button onClick={() => setModal(true)} className="btn-primary">
-                Add Manager
-              </button>
-            }
-          />
+          <EmptyState icon={<svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>}
+            title="No users found" desc="Add a manager or admin account" />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
               <thead>
-                <tr>
-                  <th className="table-th">Name</th>
-                  <th className="table-th">Email</th>
-                  <th className="table-th">Role</th>
-                  <th className="table-th">Phone</th>
-                  <th className="table-th">Status</th>
-                  <th className="table-th">Added</th>
-                  <th className="table-th">Actions</th>
-                </tr>
+                <tr>{['Name','Email','Role','Phone','Status','Actions'].map(h=><th key={h} className="table-th">{h}</th>)}</tr>
               </thead>
               <tbody>
-                {filtered.map((u) => (
-                  <tr key={u.id} className="table-row">
-                    <td className="table-td">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={u.name} />
-                        <span className="font-semibold text-[13px] text-slate-900 dark:text-slate-100">
-                          {u.name}
+                {filtered.map(u => {
+                  const isSelf = u.id === me?.id
+                  return (
+                    <tr key={u.id} className="table-row" style={{ opacity: u.is_active ? 1 : 0.6 }}>
+                      <td className="table-td">
+                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                          <div style={{ width:32, height:32, borderRadius:'50%', background:'linear-gradient(135deg,var(--primary),var(--secondary))', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:13, fontWeight:700 }}>
+                            {u.name?.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight:600, fontSize:13, color:'var(--text)' }}>
+                              {u.name} {isSelf && <span style={{ fontSize:10, color:'var(--primary)', fontWeight:700 }}>(You)</span>}
+                            </div>
+                            <div style={{ fontSize:11, color:'var(--text3)' }}>{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="table-td" style={{ fontSize:12, color:'var(--text2)' }}>{u.email}</td>
+                      <td className="table-td">{roleBadge(u.role)}</td>
+                      <td className="table-td" style={{ fontSize:12, color:'var(--text3)' }}>{u.phone || '—'}</td>
+                      <td className="table-td">
+                        <span style={{ fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:5, background: u.is_active ? 'var(--green-bg)' : 'var(--red-bg)', color: u.is_active ? 'var(--green)' : 'var(--red)' }}>
+                          {u.is_active ? 'Active' : 'Inactive'}
                         </span>
-                      </div>
-                    </td>
-                    <td className="table-td text-slate-500 dark:text-slate-300">{u.email}</td>
-                    <td className="table-td">
-                      <span className={u.role === 'ADMIN' ? 'badge-blue' : 'badge-purple'}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="table-td text-slate-500 dark:text-slate-300">{u.phone || '-'}</td>
-                    <td className="table-td">
-                      <span className={u.is_active ? 'badge-green' : 'badge-red'}>
-                        {u.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="table-td text-xs text-slate-400">
-                      {new Date(u.created_at).toLocaleDateString('en-IN', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </td>
-                    <td className="table-td">
-                      <button onClick={() => setConfirmDel(u.id)} className="btn-ghost icon-button text-red-500">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="table-td">
+                        <div style={{ display:'flex', gap:6 }}>
+                          <button onClick={()=>openEdit(u)}
+                            style={{ padding:'4px 10px', borderRadius:7, background:'var(--primary-bg)', color:'var(--primary)', border:'none', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                            Edit
+                          </button>
+                          {u.is_active ? (
+                            <button onClick={()=>{
+                              if (isSelf) { toast('You cannot deactivate your own account. Ask another admin.','error'); return }
+                              setDeactConfirm(u)
+                            }}
+                              style={{ padding:'4px 10px', borderRadius:7, background:'var(--red-bg)', color:'var(--red)', border:'none', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button onClick={()=>handleActivate(u)}
+                              style={{ padding:'4px 10px', borderRadius:7, background:'var(--green-bg)', color:'var(--green)', border:'none', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                              Reactivate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      <Modal
-        open={modal}
-        onClose={() => setModal(false)}
-        title="Add Manager"
-        subtitle="Use the same account setup pattern used across admin forms."
-      >
-        <form onSubmit={handleSave} className="form-shell">
-          <FormSection title="Account Information">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="label">Full Name *</label>
-                <input
-                  className="input"
-                  value={form.name}
-                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  required
-                  placeholder="Manager name"
-                />
-              </div>
-              <div>
-                <label className="label">Email *</label>
-                <input
-                  className="input"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                  required
-                  placeholder="email@company.com"
-                />
-              </div>
-              <div>
-                <label className="label">Phone</label>
-                <input
-                  className="input"
-                  value={form.phone}
-                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                  placeholder="9876543210"
-                />
-              </div>
-              <div>
-                <label className="label">Password *</label>
-                <input
-                  className="input"
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-                  required
-                  placeholder="Minimum 6 characters"
-                  minLength={6}
-                />
-              </div>
-              <div>
-                <label className="label">Role</label>
-                <select
-                  className="input"
-                  value={form.role}
-                  onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
-                >
-                  <option value="MANAGER">Manager</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
-            </div>
-          </FormSection>
-
-          <div className="form-actions">
-            <button type="button" onClick={() => setModal(false)} className="btn-secondary" style={{ flex: 1 }}>
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="btn-primary" style={{ flex: 1 }}>
-              {saving ? 'Adding...' : 'Add Manager'}
+      {/* Add User Modal */}
+      <Modal open={addModal} onClose={()=>setAddModal(false)} title="Add New User">
+        <form onSubmit={handleAdd} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <FormFields vals={form} onChange={(k,v)=>setForm(p=>({...p,[k]:v}))} />
+          <div style={{ display:'flex', gap:10 }}>
+            <button type="button" onClick={()=>setAddModal(false)} style={{ flex:1, padding:'10px', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:9, fontWeight:700, fontSize:13, cursor:'pointer', color:'var(--text2)' }}>Cancel</button>
+            <button type="submit" disabled={saving} style={{ flex:2, padding:'10px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:9, fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.7:1 }}>
+              {saving ? 'Creating...' : 'Create User'}
             </button>
           </div>
         </form>
       </Modal>
 
-      <ConfirmDialog
-        open={!!confirmDel}
-        onClose={() => setConfirmDel(null)}
-        onConfirm={handleDelete}
-        title="Deactivate User"
-        message="This user will lose access to the ERP system."
-        confirmLabel="Deactivate"
-        loading={deleting}
-      />
+      {/* Edit User Modal */}
+      {editModal && (
+        <Modal open={!!editModal} onClose={()=>setEditModal(null)} title={`Edit User — ${editModal.name}`}>
+          <form onSubmit={handleEdit} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+            {editModal.id === me?.id && (
+              <div style={{ background:'var(--yellow-bg)', border:'1px solid var(--yellow)', borderRadius:8, padding:'10px 14px', fontSize:12, color:'var(--yellow)', fontWeight:600 }}>
+                You are editing your own account. You cannot deactivate yourself.
+              </div>
+            )}
+            <FormFields vals={editForm} onChange={(k,v)=>setEditForm(p=>({...p,[k]:v}))} />
+            <div style={{ display:'flex', gap:10 }}>
+              <button type="button" onClick={()=>setEditModal(null)} style={{ flex:1, padding:'10px', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:9, fontWeight:700, fontSize:13, cursor:'pointer', color:'var(--text2)' }}>Cancel</button>
+              <button type="submit" disabled={saving} style={{ flex:2, padding:'10px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:9, fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.7:1 }}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Deactivate Confirm */}
+      <ConfirmDialog open={!!deactConfirm} onClose={()=>setDeactConfirm(null)} onConfirm={handleDeactivate} loading={working}
+        title="Deactivate Account" message={`Deactivate "${deactConfirm?.name}"? They will lose access until reactivated.`} confirmLabel="Deactivate" />
     </div>
   )
 }

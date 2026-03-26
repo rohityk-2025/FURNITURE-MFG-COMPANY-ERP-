@@ -156,8 +156,13 @@ export default function Expenses() {
     e.preventDefault()
     setSaving(true)
     try {
-      if (editData) await api.put(`/expenses/${editData.id}`, form)
-      else await api.post('/expenses', form)
+      // Final amount = pre-tax amount + calculated tax
+      const submitting = { ...form }
+      const pretax = parseFloat(submitting.amount) || 0
+      const taxAmt = parseFloat(submitting.tax_amount) || 0
+      submitting.amount = (pretax + taxAmt).toFixed(2)
+      if (editData) await api.put(`/expenses/${editData.id}`, submitting)
+      else await api.post('/expenses', submitting)
       toast(editData ? 'Expense updated' : 'Expense added')
       setModal(false)
       setEditData(null)

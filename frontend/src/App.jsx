@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 
 import Login          from './pages/Login'
+import PublicWebsite  from './pages/PublicWebsite'
 import AdminLayout    from './components/AdminLayout'
 import ManagerLayout  from './components/ManagerLayout'
 
@@ -21,6 +22,7 @@ import AdminCalendar   from './pages/admin/CalendarPage'
 import AdminExpenses   from './pages/admin/Expenses'
 import AdminCustomers  from './pages/admin/Customers'
 import AdminGST       from './pages/admin/GST'
+import AdminWebsiteInfo from './pages/admin/WebsiteInfo'
 
 // Manager pages
 import ManagerDashboard  from './pages/manager/Dashboard'
@@ -43,9 +45,10 @@ function Guard({ adminOnly, children }) {
 
 function AppRoutes() {
   const { user } = useAuth()
-  const home = user ? (user.role === 'ADMIN' ? '/admin' : '/manager') : '/login'
+  const home = user ? (user.role === 'ADMIN' ? '/admin' : '/manager') : '/'
   return (
     <Routes>
+      <Route path="/" element={user ? <Navigate to={home} replace /> : <PublicWebsite />} />
       <Route path="/login" element={user ? <Navigate to={home} replace /> : <Login />} />
 
       <Route path="/admin" element={<Guard adminOnly><AdminLayout /></Guard>}>
@@ -63,6 +66,7 @@ function AppRoutes() {
         <Route path="expenses"    element={<AdminExpenses />} />
         <Route path="customers"   element={<AdminCustomers />} />
         <Route path="gst"          element={<AdminGST />} />
+        <Route path="website"       element={<AdminWebsiteInfo />} />
       </Route>
 
       <Route path="/manager" element={<Guard><ManagerLayout /></Guard>}>

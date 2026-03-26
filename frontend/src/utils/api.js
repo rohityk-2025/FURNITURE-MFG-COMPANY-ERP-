@@ -24,9 +24,12 @@ api.interceptors.response.use(
   res => res,
   err => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('erp_token')
-      localStorage.removeItem('erp_user')
-      window.location.href = '/login'
+      const url = err.config?.url || ''
+      if (!url.includes('/auth/login')) {
+        localStorage.removeItem('erp_token')
+        localStorage.removeItem('erp_user')
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   }

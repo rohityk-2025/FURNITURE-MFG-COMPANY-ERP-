@@ -15,7 +15,7 @@ require('dotenv').config()
   try {
     const conn = await mysql.createConnection({
       host: process.env.DB_HOST||'localhost', user: process.env.DB_USER||'root',
-      password: process.env.DB_PASSWORD||'', database: process.env.DB_NAME||'furniture_erp'
+      password: process.env.DB_PASSWORD||'manager', database: process.env.DB_NAME||'furniture_erp6'
     })
     await conn.execute(`UPDATE users SET password=? WHERE email='admin@furnitureerp.com'`, [hash])
     await conn.execute(`UPDATE users SET password=? WHERE email='manager@furnitureerp.com'`, [hash])
